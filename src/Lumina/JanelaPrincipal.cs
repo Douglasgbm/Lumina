@@ -54,6 +54,7 @@ sealed class JanelaPrincipal : Form
         _modo = ModoVideo.PorNome(_config.Modo);
 
         Text = "Lumina";
+        using (var icone = typeof(JanelaPrincipal).Assembly.GetManifestResourceStream("lumina.ico")!) Icon = new Icon(icone);
         BackColor = Color.Black;
         KeyPreview = true;
         StartPosition = FormStartPosition.Manual;

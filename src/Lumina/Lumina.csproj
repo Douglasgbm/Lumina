@@ -1,4 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <EmbeddedResource Include="lumina.ico" LogicalName="lumina.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Lumina.Nucleo\Lumina.Nucleo.csproj" />
@@ -16,6 +20,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>lumina.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>
