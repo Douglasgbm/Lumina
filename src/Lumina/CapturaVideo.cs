@@ -43,15 +43,13 @@ sealed class CapturaVideo : IDisposable
         _fio.Start();
     }
 
-    /// <summary>Shutdown na fonte destrava um ReadSample parado (placa sem sinal não entrega quadro).</summary>
+    /// <summary>
+    /// Só avisa: a thread sai no próximo quadro, e a placa manda quadros mesmo sem sinal (60 fps, medido em 03/10/2026).
+    /// Desligar a fonte daqui travava o ReadSample até o limite de 3 s (medido 3 de 3 vezes).
+    /// </summary>
     public void Parar()
     {
         _parar = true;
-        lock (_trava)
-        {
-            try { _fonte?.Shutdown(); }
-            catch (Exception e) { Registro.Erro("captura.parar", e); }
-        }
         if (_fio is not null && !_fio.Join(3000)) Registro.Log("captura: a thread não terminou em 3 s");
         _fio = null;
     }
@@ -74,7 +72,7 @@ sealed class CapturaVideo : IDisposable
             }
             catch (Exception)
             {
-                // Parada pedida: o Shutdown faz o ReadSample falhar. Não é erro.
+                // Parada pedida no meio da abertura (OperationCanceledException). Não é erro.
             }
             finally
             {
