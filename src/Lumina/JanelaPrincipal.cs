@@ -80,6 +80,8 @@ sealed class JanelaPrincipal : Form
     {
         base.OnHandleCreated(e);
         _tela = new Renderizador(_painel.Handle);
+        if (_diagnostico) _tela.AoExibir = AoQuadro;
+        if (_config.ModoSuave) _tela.IniciarSuave();
         _captura = new CapturaVideo(_tela, _diagnostico ? AoQuadro : null);
         _captura.Iniciar(_modo);
 
@@ -188,6 +190,11 @@ sealed class JanelaPrincipal : Form
             foreach (var m in new[] { ModoVideo.Hd60, ModoVideo.FullHd30 })
                 menu.Items.Add(new ToolStripMenuItem(m.Nome, null, (_, _) => TrocarModo(m)) { Checked = m == _modo });
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Modo suave (como o OBS)", null, (_, _) => DefinirSuave(true))
+            { Checked = _tela?.Suave == true });
+            menu.Items.Add(new ToolStripMenuItem("Menor atraso", null, (_, _) => DefinirSuave(false))
+            { Checked = _tela?.Suave == false });
+            menu.Items.Add(new ToolStripSeparator());
 
             var saida = new ToolStripMenuItem("Saída de som");
             saida.DropDownItems.Add(new ToolStripMenuItem("Padrão do Windows", null, (_, _) => FixarSaida(null))
@@ -212,6 +219,13 @@ sealed class JanelaPrincipal : Form
         };
         menu.Items.Add("…"); // o Opening só dispara com pelo menos um item
         return menu;
+    }
+
+    void DefinirSuave(bool suave)
+    {
+        if (_tela is null) return;
+        if (suave) _tela.IniciarSuave(); else _tela.PararSuave();
+        SalvarConfiguracao();
     }
 
     void FixarSaida(string? id)
@@ -266,6 +280,7 @@ sealed class JanelaPrincipal : Form
             SaidaFixaId = _audio?.SaidaFixaId,
             Volume = _audio?.Volume ?? _config.Volume,
             Mudo = _forcarMudo ? _config.Mudo : _audio?.Mudo ?? _config.Mudo,
+            ModoSuave = _tela?.Suave ?? _config.ModoSuave,
         };
         try { _armazem.Salvar(_config); }
         catch (Exception ex) { Registro.Erro("config.salvar", ex); }

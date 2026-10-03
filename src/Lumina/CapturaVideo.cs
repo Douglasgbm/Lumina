@@ -13,6 +13,7 @@ sealed class CapturaVideo : IDisposable
     readonly Renderizador _tela;
     readonly Action<double>? _aoQuadro;
     readonly Revezamento _revezamento = new("captura");
+    readonly ResumoAtraso _chegada = new();
     long _ultimoQuadro; // Environment.TickCount64; 0 = nenhum ainda
 
     /// <param name="aoQuadro">Recebe o atraso em ms entre a chegada do quadro e o envio dele para a tela.</param>
@@ -153,17 +154,25 @@ sealed class CapturaVideo : IDisposable
         using var buffer = amostra.GetBufferByIndex(0);
         using var dxgi = buffer.QueryInterface<IMFDXGIBuffer>();
         using var textura = new ID3D11Texture2D(dxgi.GetResource(typeof(ID3D11Texture2D).GUID));
-        _tela.Apresentar(textura, dxgi.SubresourceIndex);
+        if (_tela.Suave)
+        {
+            _tela.Guardar(textura, dxgi.SubresourceIndex, tempoAmostra);
+            // O atraso da fila acompanha o p95 da chegada: cobre os trancos sem esperar à toa.
+            if (_chegada.Registrar((Relogio.Agora100ns() - tempoAmostra) / 10_000.0) is { } r)
+            {
+                _tela.AtrasoMs = AtrasoSuave.De(r);
+                if (_aoQuadro is not null)
+                    Registro.Diagnostico($"chegada: mediana={r.Mediana:F1} p95={r.P95:F1} máx={r.Maximo:F1} ms → atraso da fila {_tela.AtrasoMs:F0} ms");
+            }
+        }
+        else
+        {
+            _tela.Apresentar(textura, dxgi.SubresourceIndex);
+            _aoQuadro?.Invoke((Relogio.Agora100ns() - tempoAmostra) / 10_000.0);
+        }
         Interlocked.Exchange(ref _ultimoQuadro, Environment.TickCount64);
-        _aoQuadro?.Invoke((Agora100ns() - tempoAmostra) / 10_000.0);
         return true;
     }
-
-    /// <summary>
-    /// Relógio do PC (QPC) em 100 ns. O tempo da amostra da placa usa a mesma base:
-    /// medido em 03/10/2026, 1º quadro com tempo 2248527147211 e relógio 2248527567580.
-    /// </summary>
-    static long Agora100ns() => (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (10_000_000.0 / System.Diagnostics.Stopwatch.Frequency));
 
     static FormatoNativo Descrever(int indice, IMFMediaType t)
     {

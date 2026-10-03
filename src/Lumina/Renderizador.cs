@@ -1,3 +1,4 @@
+using Lumina.Nucleo;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
@@ -8,7 +9,13 @@ namespace Lumina;
 /// <summary>
 /// Dono da GPU. A cadeia de imagens tem o tamanho do vídeo e o Windows estica para o painel
 /// (Scaling.Stretch): copiar o quadro é tudo que se faz por quadro, sem shader.
-/// Só a thread de captura chama Apresentar.
+///
+/// Dois jeitos de mostrar:
+/// - menor atraso: a captura chama Apresentar e o quadro vai para a tela na hora em que chega;
+/// - suave (como o OBS): a captura chama Guardar, o quadro vai para uma fila curta e um relógio
+///   preso ao monitor (WaitForVBlank) mostra a cada batida o quadro que já venceu pelo carimbo.
+///   Esconde os trancos de chegada da placa (medidos em 03/10/2026) ao custo do atraso da fila.
+/// Toda mexida na cadeia e na fila passa pela mesma trava.
 /// </summary>
 sealed class Renderizador : IDisposable
 {
@@ -17,9 +24,34 @@ sealed class Renderizador : IDisposable
 
     readonly ID3D11DeviceContext _ctx;
     readonly IntPtr _hwnd;
+    readonly object _trava = new();
     IDXGISwapChain1? _cadeia;
     uint _largura, _altura;
     Format _formato;
+
+    // Modo suave
+    const int Vagas = 6;
+    readonly ID3D11Texture2D?[] _vagas = new ID3D11Texture2D?[Vagas];
+    readonly long[] _carimboDaVaga = new long[Vagas];
+    readonly Stack<int> _livres = new();
+    readonly Agenda<int> _agenda = new(Vagas - 1);
+    uint _larguraVagas, _alturaVagas;
+    Format _formatoVagas;
+    Thread? _relogio;
+    volatile bool _pararRelogio;
+    double _atrasoMs = AtrasoSuave.Inicial;
+
+    /// <summary>Diagnóstico do modo suave: atraso em ms entre o carimbo do quadro e ele ir para a tela.</summary>
+    public Action<double>? AoExibir { get; set; }
+
+    public bool Suave => _relogio is not null;
+
+    /// <summary>Atraso da fila do modo suave; a captura ajusta pelo que mede de chegada.</summary>
+    public double AtrasoMs
+    {
+        get => Volatile.Read(ref _atrasoMs);
+        set => Volatile.Write(ref _atrasoMs, value);
+    }
 
     public Renderizador(IntPtr hwnd)
     {
@@ -35,7 +67,126 @@ sealed class Renderizador : IDisposable
         Gerente.ResetDevice(Dispositivo).CheckError();
     }
 
+    /// <summary>Menor atraso: o quadro vai para a tela agora.</summary>
     public void Apresentar(ID3D11Texture2D textura, uint subrecurso)
+    {
+        lock (_trava) MostrarJa(textura, subrecurso);
+    }
+
+    // --- modo suave
+
+    public void IniciarSuave()
+    {
+        if (_relogio is not null) return;
+        _pararRelogio = false;
+        _relogio = new Thread(LacoDoRelogio) { IsBackground = true, Name = "relógio da tela" };
+        _relogio.Start();
+        Registro.Log("tela: modo suave");
+    }
+
+    public void PararSuave()
+    {
+        if (_relogio is null) return;
+        _pararRelogio = true;
+        _relogio.Join(1000);
+        _relogio = null;
+        lock (_trava)
+            foreach (var v in _agenda.Esvaziar()) _livres.Push(v);
+        Registro.Log("tela: modo menor atraso");
+    }
+
+    /// <summary>Suave: copia o quadro para uma vaga da fila; quem mostra é o relógio.</summary>
+    public void Guardar(ID3D11Texture2D textura, uint subrecurso, long carimbo)
+    {
+        var d = textura.Description;
+        lock (_trava)
+        {
+            if (_vagas[0] is null || d.Width != _larguraVagas || d.Height != _alturaVagas || d.Format != _formatoVagas)
+                CriarVagas(d);
+            if (!_livres.TryPop(out int vaga)) return; // não acontece: a fila guarda uma vaga a menos que o total
+            _ctx.CopySubresourceRegion(_vagas[vaga]!, 0, 0, 0, 0, textura, subrecurso);
+            _carimboDaVaga[vaga] = carimbo;
+            if (_agenda.Adicionar(carimbo, vaga, out int despejada)) _livres.Push(despejada);
+        }
+    }
+
+    void LacoDoRelogio()
+    {
+        IDXGIOutput? monitor = null;
+        int batidas = 0;
+        try
+        {
+            while (!_pararRelogio)
+            {
+                // A janela pode mudar de monitor: pega de novo a cada ~2 s.
+                if (monitor is null || ++batidas % 120 == 0)
+                {
+                    monitor?.Dispose();
+                    monitor = null;
+                    lock (_trava)
+                    {
+                        try { monitor = _cadeia?.GetContainingOutput(); }
+                        catch (Exception) { monitor = null; }
+                    }
+                }
+                if (monitor is null) Thread.Sleep(5);
+                else
+                {
+                    try { monitor.WaitForVBlank(); }
+                    catch (Exception) { monitor.Dispose(); monitor = null; Thread.Sleep(5); }
+                }
+
+                lock (_trava)
+                {
+                    var escolha = _agenda.Escolher(Relogio.Agora100ns(), (long)(AtrasoMs * 10_000));
+                    if (escolha is not { } e) continue;
+                    foreach (var v in e.Descartados) _livres.Push(v);
+                    MostrarJa(_vagas[e.Item]!, 0);
+                    _livres.Push(e.Item);
+                    AoExibir?.Invoke((Relogio.Agora100ns() - _carimboDaVaga[e.Item]) / 10_000.0);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Registro.Erro("relógio da tela", ex);
+        }
+        finally
+        {
+            monitor?.Dispose();
+        }
+    }
+
+    void CriarVagas(Texture2DDescription origem)
+    {
+        foreach (var v in _vagas) v?.Dispose();
+        _livres.Clear();
+        _agenda.Esvaziar();
+        var desc = new Texture2DDescription
+        {
+            Width = origem.Width,
+            Height = origem.Height,
+            MipLevels = 1,
+            ArraySize = 1,
+            Format = origem.Format,
+            SampleDescription = new SampleDescription(1, 0),
+            Usage = ResourceUsage.Default,
+            BindFlags = BindFlags.ShaderResource,
+        };
+        for (int i = 0; i < Vagas; i++)
+        {
+            _vagas[i] = Dispositivo.CreateTexture2D(desc);
+            _livres.Push(i);
+        }
+        _larguraVagas = origem.Width;
+        _alturaVagas = origem.Height;
+        _formatoVagas = origem.Format;
+    }
+
+    // --- comum
+
+    /// <summary>Chamar com a trava.</summary>
+    void MostrarJa(ID3D11Texture2D textura, uint subrecurso)
     {
         var d = textura.Description;
         if (_cadeia is null || d.Width != _largura || d.Height != _altura || d.Format != _formato)
@@ -73,7 +224,15 @@ sealed class Renderizador : IDisposable
 
     public void Dispose()
     {
-        _cadeia?.Dispose();
+        // Para o relógio sem registrar "modo menor atraso": ao fechar, o modo não mudou.
+        _pararRelogio = true;
+        _relogio?.Join(1000);
+        _relogio = null;
+        lock (_trava)
+        {
+            foreach (var v in _vagas) v?.Dispose();
+            _cadeia?.Dispose();
+        }
         Gerente.Dispose();
         _ctx.Dispose();
         Dispositivo.Dispose();
