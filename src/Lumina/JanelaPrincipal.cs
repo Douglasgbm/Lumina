@@ -24,6 +24,7 @@ sealed class JanelaPrincipal : Form
     // Diagnóstico
     readonly ContadorQuadros _contador = new();
     readonly Stopwatch _relogio = Stopwatch.StartNew();
+    readonly ResumoAtraso _atraso = new();
 
     /// <param name="forcarMudo">Usado a partir do andar 2 (Task 5).</param>
     public JanelaPrincipal(bool diagnostico, bool forcarMudo)
@@ -63,8 +64,10 @@ sealed class JanelaPrincipal : Form
 
     // --- diagnóstico (thread de captura)
 
-    void AoQuadro()
+    void AoQuadro(double atrasoMs)
     {
         if (_contador.Registrar(_relogio.Elapsed) is double fps) Registro.Diagnostico($"fps={fps:F1}");
+        if (_atraso.Registrar(atrasoMs) is { } r)
+            Registro.Diagnostico($"atraso chegada→tela: mediana={r.Mediana:F1} p95={r.P95:F1} máx={r.Maximo:F1} ms");
     }
 }

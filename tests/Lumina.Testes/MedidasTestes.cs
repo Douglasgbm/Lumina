@@ -58,3 +58,32 @@ public class MedidasTestes
         Assert.Null(Frequencia.Estimar(chiado, 48000));
     }
 }
+
+public class ResumoAtrasoTestes
+{
+    [Fact]
+    public void Resume_a_cada_N_amostras_com_mediana_p95_e_maximo()
+    {
+        var r = new ResumoAtraso(100);
+        ResumoAtraso.Resumo? resumo = null;
+        foreach (var ms in Enumerable.Range(1, 100).Reverse()) resumo = r.Registrar(ms) ?? resumo;
+        Assert.Equal(new ResumoAtraso.Resumo(50, 95, 100), resumo);
+    }
+
+    [Fact]
+    public void Nao_resume_antes_de_juntar_N_amostras()
+    {
+        var r = new ResumoAtraso(10);
+        for (int i = 0; i < 9; i++) Assert.Null(r.Registrar(5));
+        Assert.NotNull(r.Registrar(5));
+    }
+
+    [Fact]
+    public void Depois_de_resumir_comeca_do_zero()
+    {
+        var r = new ResumoAtraso(2);
+        Assert.Equal(new ResumoAtraso.Resumo(100, 100, 100), r.Registrar(100) ?? r.Registrar(100));
+        r.Registrar(1);
+        Assert.Equal(new ResumoAtraso.Resumo(1, 2, 2), r.Registrar(2));
+    }
+}

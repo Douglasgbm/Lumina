@@ -11,14 +11,15 @@ namespace Lumina;
 sealed class CapturaVideo : IDisposable
 {
     readonly Renderizador _tela;
-    readonly Action? _aoQuadro;
+    readonly Action<double>? _aoQuadro;
     readonly object _trava = new();
     Thread? _fio;
     volatile bool _parar;
     IMFMediaSource? _fonte;
     long _ultimoQuadro; // Environment.TickCount64; 0 = nenhum ainda
 
-    public CapturaVideo(Renderizador tela, Action? aoQuadro)
+    /// <param name="aoQuadro">Recebe o atraso em ms entre a chegada do quadro e o envio dele para a tela.</param>
+    public CapturaVideo(Renderizador tela, Action<double>? aoQuadro)
     {
         _tela = tela;
         _aoQuadro = aoQuadro;
@@ -138,7 +139,7 @@ sealed class CapturaVideo : IDisposable
     bool LerUm(IMFSourceReader leitor)
     {
         using var amostra = leitor.ReadSample(SourceReaderIndex.FirstVideoStream, SourceReaderControlFlag.None,
-            out _, out SourceReaderFlag flags, out _);
+            out _, out SourceReaderFlag flags, out long tempoAmostra);
         if ((flags & (SourceReaderFlag.EndOfStream | SourceReaderFlag.Error)) != 0) return false;
         if (amostra is null) return true;
         using var buffer = amostra.GetBufferByIndex(0);
@@ -146,9 +147,15 @@ sealed class CapturaVideo : IDisposable
         using var textura = new ID3D11Texture2D(dxgi.GetResource(typeof(ID3D11Texture2D).GUID));
         _tela.Apresentar(textura, dxgi.SubresourceIndex);
         Interlocked.Exchange(ref _ultimoQuadro, Environment.TickCount64);
-        _aoQuadro?.Invoke();
+        _aoQuadro?.Invoke((Agora100ns() - tempoAmostra) / 10_000.0);
         return true;
     }
+
+    /// <summary>
+    /// Relógio do PC (QPC) em 100 ns. O tempo da amostra da placa usa a mesma base:
+    /// medido em 03/10/2026, 1º quadro com tempo 2248527147211 e relógio 2248527567580.
+    /// </summary>
+    static long Agora100ns() => (long)(System.Diagnostics.Stopwatch.GetTimestamp() * (10_000_000.0 / System.Diagnostics.Stopwatch.Frequency));
 
     static FormatoNativo Descrever(int indice, IMFMediaType t)
     {

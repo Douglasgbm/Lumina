@@ -51,3 +51,24 @@ public static class Frequencia
         return (subidas - 1) * (double)taxa / (ultima - primeira);
     }
 }
+
+/// <summary>Junta atrasos em ms e devolve mediana, p95 e máximo a cada N amostras.</summary>
+public sealed class ResumoAtraso(int amostrasPorResumo = 120)
+{
+    public readonly record struct Resumo(double Mediana, double P95, double Maximo);
+
+    readonly List<double> _ms = new();
+
+    public Resumo? Registrar(double ms)
+    {
+        _ms.Add(ms);
+        if (_ms.Count < amostrasPorResumo) return null;
+        _ms.Sort();
+        var r = new Resumo(Percentil(0.50), Percentil(0.95), _ms[^1]);
+        _ms.Clear();
+        return r;
+    }
+
+    /// <summary>Posto mais próximo: o menor valor com pelo menos p das amostras abaixo ou iguais.</summary>
+    double Percentil(double p) => _ms[(int)Math.Ceiling(p * _ms.Count) - 1];
+}
