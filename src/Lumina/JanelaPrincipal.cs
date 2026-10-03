@@ -20,7 +20,7 @@ sealed class JanelaPrincipal : Form
         Text = "sem sinal",
         ForeColor = Color.Gray,
         BackColor = Color.Black,
-        Font = new Font("Segoe UI", 20f),
+        Font = new Font("Segoe UI", 14f),
         TextAlign = ContentAlignment.MiddleCenter,
         Dock = DockStyle.Fill,
         Visible = false,
@@ -248,6 +248,8 @@ sealed class JanelaPrincipal : Form
     void Vigiar()
     {
         bool semSinal = _captura is null || _captura.MsDesdeUltimoQuadro > 1000;
+        var texto = Problemas.Mensagem(_captura?.Problema ?? ProblemaCaptura.Nenhum);
+        if (_semSinal.Text != texto) _semSinal.Text = texto;
         if (_semSinal.Visible != semSinal)
         {
             _semSinal.Visible = semSinal;

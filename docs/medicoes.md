@@ -55,3 +55,12 @@ Teste de tom (1000/1500 Hz) impossível sem o HDMI do PC na placa; decisão: pro
 | Webcam com o Lumina aberto | funciona (Douglas) |
 | Headset fixado desligado no meio | **pendente** (não testado) |
 | Volta sozinho ao fechar o ffplay | **pendente**; parcial às 11:41: com o ffplay aberto o Lumina recebe `MF_E_HW_MFT_FAILED_START_STREAMING` e tenta de novo a cada 2 s |
+
+## Correção — a câmera negada era o Norton (03/10/2026 ~13:40)
+
+O `E_ACCESSDENIED` que aparecia em algumas aberturas **não** vinha do terminal do Claude: o log do
+Auto-Sandbox do Norton 360 (`C:\ProgramData\Norton\Antivirus\log\autosandbox.log`) mostra que cada
+`Lumina.exe` recompilado roda isolado ("Sandboxing (no custody)") na 1ª abertura — e isolado não usa a
+câmera. Nas seguintes entra na lista de exceções e funciona. Bate com todas as recusas (10:16, 10:51,
+11:31–11:35, 13:16) e todos os sucessos do dia. Às 13:37 a câmera abriu inclusive pelo terminal do Claude.
+A tela "sem sinal" agora diz "Acesso à câmera negado" e sugere abrir de novo.

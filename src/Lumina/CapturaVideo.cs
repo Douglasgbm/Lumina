@@ -15,6 +15,12 @@ sealed class CapturaVideo : IDisposable
     readonly Revezamento _revezamento = new("captura");
     readonly ResumoAtraso _chegada = new();
     long _ultimoQuadro; // Environment.TickCount64; 0 = nenhum ainda
+    volatile ProblemaCaptura _problema;
+
+    sealed class PlacaNaoConectada() : Exception("placa não conectada");
+
+    /// <summary>O último problema ao abrir ou ler a placa; Nenhum quando chegou quadro.</summary>
+    public ProblemaCaptura Problema => _problema;
 
     /// <param name="aoQuadro">Recebe o atraso em ms entre a chegada do quadro e o envio dele para a tela.</param>
     public CapturaVideo(Renderizador tela, Action<double>? aoQuadro)
@@ -71,6 +77,12 @@ sealed class CapturaVideo : IDisposable
             catch (Exception e) when (!vez.Parar)
             {
                 Registro.Erro("captura", e);
+                _problema = e switch
+                {
+                    PlacaNaoConectada => ProblemaCaptura.PlacaAusente,
+                    SharpGen.Runtime.SharpGenException s => Problemas.DeHResult(s.HResult),
+                    _ => ProblemaCaptura.Outro,
+                };
             }
             catch (Exception)
             {
@@ -92,7 +104,7 @@ sealed class CapturaVideo : IDisposable
     IMFSourceReader Abrir(ModoVideo modo, Revezamento.Vez vez, out IMFMediaSource? fonte)
     {
         fonte = null;
-        var link = ProcurarPlaca() ?? throw new InvalidOperationException("placa não conectada");
+        var link = ProcurarPlaca() ?? throw new PlacaNaoConectada();
         using var fa = MediaFactory.MFCreateAttributes(2);
         fa.Set(CaptureDeviceAttributeKeys.SourceType, CaptureDeviceAttributeKeys.SourceTypeVidcap);
         fa.Set(CaptureDeviceAttributeKeys.SourceTypeVidcapSymbolicLink, link);
@@ -171,6 +183,7 @@ sealed class CapturaVideo : IDisposable
             _aoQuadro?.Invoke((Relogio.Agora100ns() - tempoAmostra) / 10_000.0);
         }
         Interlocked.Exchange(ref _ultimoQuadro, Environment.TickCount64);
+        _problema = ProblemaCaptura.Nenhum;
         return true;
     }
 
