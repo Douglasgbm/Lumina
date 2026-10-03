@@ -34,3 +34,14 @@ quadro pelo USB, relógio QPC) até o `Present`; a placa marca o fim da chegada 
 | parte só do Lumina (descomprimir + copiar + apresentar) | ≈ 2–4 ms |
 | fechar com o Switch desligado | thread termina ~0,3 s após o X (3 de 3) |
 | teste de uso (Douglas, Monster Hunter) | "fluindo bem, não vejo problemas" |
+
+## Andar 2 — som (03/10/2026 11:48–11:52)
+
+Teste de tom (1000/1500 Hz) impossível sem o HDMI do PC na placa; decisão: prova de ouvido com o Switch.
+
+| Medida | Valor |
+|---|---|
+| formato anunciado → usado (lumina.log) | float32 96000 Hz 1 canal → float32 48000 Hz 2 canais |
+| saída | Alto-falantes (Realtek(R) Audio), a padrão do Windows |
+| canais esquerdo × direito (diagnóstico, som do jogo) | diferentes entre si o tempo todo (ex.: 1253 × 994 Hz), coerente com estéreo real |
+| ouvido do Douglas | "som normal e junto com a imagem" |
