@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Régua Lumina</title>
+<style>
+  html, body { margin: 0; background: #000; color: #fff; font: bold 160px/1 Consolas, monospace; }
+  #t { position: fixed; left: 24px; top: 24px; }
+</style>
+<div id="t">000000</div>
+<script>
+  const t = document.getElementById('t');
+  const zero = performance.now();
+  (function quadro() {
+    t.textContent = Math.floor(performance.now() - zero).toString().padStart(6, '0');
+    requestAnimationFrame(quadro);
+  })();
+</script>
