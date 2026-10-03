@@ -22,6 +22,8 @@ sealed class JanelaPrincipal : Form
     CapturaVideo? _captura;
     MotorAudio? _audio;
     ModoVideo _modo = ModoVideo.Hd60;
+    Rectangle _limitesNormais;
+    bool _telaCheia;
 
     // Diagnóstico
     readonly ContadorQuadros _contador = new();
@@ -41,6 +43,11 @@ sealed class JanelaPrincipal : Form
         MinimumSize = new Size(320, 180);
         Bounds = new Rectangle(100, 100, 1280, 720);
         Controls.Add(_painel);
+
+        ContextMenuStrip = MontarMenu();
+        _painel.ContextMenuStrip = ContextMenuStrip;
+        DoubleClick += (_, _) => AlternarTelaCheia();
+        _painel.DoubleClick += (_, _) => AlternarTelaCheia();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -65,6 +72,19 @@ sealed class JanelaPrincipal : Form
         _painel.Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
     }
 
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        switch (e.KeyCode)
+        {
+            case Keys.F11: AlternarTelaCheia(); break;
+            case Keys.Escape when _telaCheia: AlternarTelaCheia(); break;
+            case Keys.M: AlternarMudo(); break;
+            default: return;
+        }
+        e.Handled = true;
+    }
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         _captura?.Dispose();
@@ -72,6 +92,100 @@ sealed class JanelaPrincipal : Form
         _tela?.Dispose();
         base.OnFormClosing(e);
     }
+
+
+
+    // --- controles
+
+    void AlternarTelaCheia()
+    {
+        if (!_telaCheia)
+        {
+            _limitesNormais = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            var monitor = Screen.FromControl(this).Bounds;
+            WindowState = FormWindowState.Normal;
+            FormBorderStyle = FormBorderStyle.None;
+            Bounds = monitor;
+            _telaCheia = true;
+        }
+        else
+        {
+            FormBorderStyle = FormBorderStyle.Sizable;
+            Bounds = _limitesNormais;
+            _telaCheia = false;
+        }
+        SalvarConfiguracao();
+    }
+
+    void AlternarMudo()
+    {
+        if (_audio is null) return;
+        _audio.Mudo = !_audio.Mudo;
+        SalvarConfiguracao();
+    }
+
+    void TrocarModo(ModoVideo modo)
+    {
+        if (modo == _modo || _captura is null) return;
+        _modo = modo;
+        OnResize(EventArgs.Empty);
+        _captura.Iniciar(_modo);
+        SalvarConfiguracao();
+    }
+
+    ContextMenuStrip MontarMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Opening += (_, _) =>
+        {
+            menu.Items.Clear();
+            foreach (var m in new[] { ModoVideo.Hd60, ModoVideo.FullHd30 })
+                menu.Items.Add(new ToolStripMenuItem(m.Nome, null, (_, _) => TrocarModo(m)) { Checked = m == _modo });
+            menu.Items.Add(new ToolStripSeparator());
+
+            var saida = new ToolStripMenuItem("Saída de som");
+            saida.DropDownItems.Add(new ToolStripMenuItem("Padrão do Windows", null, (_, _) => FixarSaida(null))
+            { Checked = _audio?.SaidaFixaId is null });
+            if (_audio is not null)
+                foreach (var (id, nome) in _audio.Saidas())
+                    saida.DropDownItems.Add(new ToolStripMenuItem(nome, null, (_, _) => FixarSaida(id))
+                    { Checked = _audio.SaidaFixaId == id });
+            menu.Items.Add(saida);
+
+            var volume = new ToolStripMenuItem("Volume");
+            foreach (var pct in new[] { 100, 75, 50, 25, 10 })
+                volume.DropDownItems.Add(new ToolStripMenuItem($"{pct}%", null, (_, _) => DefinirVolume(pct / 100f))
+                { Checked = _audio is not null && Math.Abs(_audio.Volume - pct / 100f) < 0.001f });
+            menu.Items.Add(volume);
+            menu.Items.Add(new ToolStripMenuItem("Mudo", null, (_, _) => AlternarMudo())
+            { Checked = _audio?.Mudo == true, ShortcutKeyDisplayString = "M" });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(new ToolStripMenuItem("Tela cheia", null, (_, _) => AlternarTelaCheia())
+            { Checked = _telaCheia, ShortcutKeyDisplayString = "F11" });
+            menu.Items.Add(new ToolStripMenuItem("Sair", null, (_, _) => Close()));
+        };
+        menu.Items.Add("…"); // o Opening só dispara com pelo menos um item
+        return menu;
+    }
+
+    void FixarSaida(string? id)
+    {
+        if (_audio is null) return;
+        _audio.SaidaFixaId = id;
+        SalvarConfiguracao();
+    }
+
+    void DefinirVolume(float v)
+    {
+        if (_audio is null) return;
+        _audio.Volume = v;
+        _audio.Mudo = false;
+        SalvarConfiguracao();
+    }
+
+    // --- memória (Task 8)
+
+    void SalvarConfiguracao() { }
 
     // --- diagnóstico (threads de captura)
 
