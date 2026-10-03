@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{C08B756F-07B4-4A71-8E27-A20EDDD52D56}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumina.Nucleo", "src\Lumina.Nucleo\Lumina.Nucleo.csproj", "{823A9769-9319-4C59-9A76-B4401B36E99D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{1F4EABF0-6FF8-4C8D-ABE2-D5764BD8A109}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lumina.Testes", "tests\Lumina.Testes\Lumina.Testes.csproj", "{B6847035-E7CF-4AE2-9422-2B1D27E18A0E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{823A9769-9319-4C59-9A76-B4401B36E99D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{823A9769-9319-4C59-9A76-B4401B36E99D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{823A9769-9319-4C59-9A76-B4401B36E99D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{823A9769-9319-4C59-9A76-B4401B36E99D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6847035-E7CF-4AE2-9422-2B1D27E18A0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6847035-E7CF-4AE2-9422-2B1D27E18A0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6847035-E7CF-4AE2-9422-2B1D27E18A0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6847035-E7CF-4AE2-9422-2B1D27E18A0E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{823A9769-9319-4C59-9A76-B4401B36E99D} = {C08B756F-07B4-4A71-8E27-A20EDDD52D56}
+		{B6847035-E7CF-4AE2-9422-2B1D27E18A0E} = {1F4EABF0-6FF8-4C8D-ABE2-D5764BD8A109}
+	EndGlobalSection
+EndGlobal
