@@ -15,13 +15,15 @@ sealed class PainelVideo : Control
 sealed class JanelaPrincipal : Form
 {
     readonly PainelVideo _painel = new();
+    readonly ArmazemConfiguracao _armazem = new(Path.Combine(Registro.Pasta, "config.json"));
     readonly bool _diagnostico;
     readonly bool _forcarMudo;
 
     Renderizador? _tela;
     CapturaVideo? _captura;
     MotorAudio? _audio;
-    ModoVideo _modo = ModoVideo.Hd60;
+    ModoVideo _modo;
+    Configuracao _config;
     Rectangle _limitesNormais;
     bool _telaCheia;
 
@@ -35,13 +37,18 @@ sealed class JanelaPrincipal : Form
     {
         _diagnostico = diagnostico;
         _forcarMudo = forcarMudo;
+        _config = _armazem.Ler();
+        _modo = ModoVideo.PorNome(_config.Modo);
 
         Text = "Lumina";
         BackColor = Color.Black;
         KeyPreview = true;
         StartPosition = FormStartPosition.Manual;
         MinimumSize = new Size(320, 180);
-        Bounds = new Rectangle(100, 100, 1280, 720);
+        var telas = Screen.AllScreens.Select(s => Para(s.WorkingArea)).ToList();
+        var r = Enquadramento.GarantirVisivel(new Retangulo(_config.X, _config.Y, _config.Largura, _config.Altura),
+            telas, Para(Screen.PrimaryScreen!.WorkingArea));
+        Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
         Controls.Add(_painel);
 
         ContextMenuStrip = MontarMenu();
@@ -59,10 +66,18 @@ sealed class JanelaPrincipal : Form
 
         _audio = new MotorAudio(SynchronizationContext.Current!, _diagnostico ? AoBlocoAudio : null)
         {
-            Mudo = _forcarMudo,
+            Volume = _config.Volume,
+            Mudo = _config.Mudo || _forcarMudo,
         };
+        _audio.SaidaFixaId = _config.SaidaFixaId;
         try { _audio.Iniciar(); }
         catch (Exception ex) { Registro.Erro("áudio.iniciar", ex); }
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (_config.TelaCheia) AlternarTelaCheia();
     }
 
     protected override void OnResize(EventArgs e)
@@ -87,6 +102,7 @@ sealed class JanelaPrincipal : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        SalvarConfiguracao();
         _captura?.Dispose();
         _audio?.Dispose();
         _tela?.Dispose();
@@ -183,9 +199,28 @@ sealed class JanelaPrincipal : Form
         SalvarConfiguracao();
     }
 
-    // --- memória (Task 8)
+    // --- memória
 
-    void SalvarConfiguracao() { }
+    void SalvarConfiguracao()
+    {
+        var normal = _telaCheia ? _limitesNormais : (WindowState == FormWindowState.Normal ? Bounds : RestoreBounds);
+        _config = _config with
+        {
+            X = normal.X,
+            Y = normal.Y,
+            Largura = normal.Width,
+            Altura = normal.Height,
+            TelaCheia = _telaCheia,
+            Modo = _modo.Nome,
+            SaidaFixaId = _audio?.SaidaFixaId,
+            Volume = _audio?.Volume ?? _config.Volume,
+            Mudo = _forcarMudo ? _config.Mudo : _audio?.Mudo ?? _config.Mudo,
+        };
+        try { _armazem.Salvar(_config); }
+        catch (Exception ex) { Registro.Erro("config.salvar", ex); }
+    }
+
+    static Retangulo Para(Rectangle r) => new(r.X, r.Y, r.Width, r.Height);
 
     // --- diagnóstico (threads de captura)
 
