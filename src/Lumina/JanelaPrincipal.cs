@@ -15,6 +15,17 @@ sealed class PainelVideo : Control
 sealed class JanelaPrincipal : Form
 {
     readonly PainelVideo _painel = new();
+    readonly Label _semSinal = new()
+    {
+        Text = "sem sinal",
+        ForeColor = Color.Gray,
+        BackColor = Color.Black,
+        Font = new Font("Segoe UI", 20f),
+        TextAlign = ContentAlignment.MiddleCenter,
+        Dock = DockStyle.Fill,
+        Visible = false,
+    };
+    readonly System.Windows.Forms.Timer _vigia = new() { Interval = 500 };
     readonly ArmazemConfiguracao _armazem = new(Path.Combine(Registro.Pasta, "config.json"));
     readonly bool _diagnostico;
     readonly bool _forcarMudo;
@@ -27,6 +38,7 @@ sealed class JanelaPrincipal : Form
     Rectangle _limitesNormais;
     bool _maximizadaAntesDaTelaCheia;
     bool _telaCheia;
+    int _tiquesSemAudio;
 
     // Diagnóstico
     readonly ContadorQuadros _contador = new();
@@ -52,11 +64,15 @@ sealed class JanelaPrincipal : Form
         Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
         if (_config.Maximizada) WindowState = FormWindowState.Maximized;
         Controls.Add(_painel);
+        Controls.Add(_semSinal);
 
         ContextMenuStrip = MontarMenu();
         _painel.ContextMenuStrip = ContextMenuStrip;
+        _semSinal.ContextMenuStrip = ContextMenuStrip;
         DoubleClick += (_, _) => AlternarTelaCheia();
         _painel.DoubleClick += (_, _) => AlternarTelaCheia();
+        _semSinal.DoubleClick += (_, _) => AlternarTelaCheia();
+        _vigia.Tick += (_, _) => Vigiar();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -74,6 +90,7 @@ sealed class JanelaPrincipal : Form
         _audio.SaidaFixaId = _config.SaidaFixaId;
         try { _audio.Iniciar(); }
         catch (Exception ex) { Registro.Erro("áudio.iniciar", ex); }
+        _vigia.Start();
     }
 
     protected override void OnShown(EventArgs e)
@@ -104,14 +121,13 @@ sealed class JanelaPrincipal : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        _vigia.Stop();
         SalvarConfiguracao();
         _captura?.Dispose();
         _audio?.Dispose();
         _tela?.Dispose();
         base.OnFormClosing(e);
     }
-
-
 
     // --- controles
 
@@ -201,6 +217,26 @@ sealed class JanelaPrincipal : Form
         _audio.Volume = v;
         _audio.Mudo = false;
         SalvarConfiguracao();
+    }
+
+    // --- sem sinal e reconexão
+
+    void Vigiar()
+    {
+        bool semSinal = _captura is null || _captura.MsDesdeUltimoQuadro > 1000;
+        if (_semSinal.Visible != semSinal)
+        {
+            _semSinal.Visible = semSinal;
+            _painel.Visible = !semSinal;
+            if (semSinal) _semSinal.BringToFront();
+        }
+
+        if (_audio is not null && !_audio.Ativo && ++_tiquesSemAudio >= 4)
+        {
+            _tiquesSemAudio = 0;
+            try { _audio.Iniciar(); }
+            catch (Exception ex) { Registro.Erro("áudio.reiniciar", ex); }
+        }
     }
 
     // --- memória
