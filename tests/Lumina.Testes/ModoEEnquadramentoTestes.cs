@@ -11,6 +11,13 @@ public class ModoEEnquadramentoTestes
         Assert.Equal(ModoVideo.Hd60, ModoVideo.FullHd30.Alternar());
     }
 
+    [Fact]
+    public void Titulo_da_janela_mostra_o_modo()
+    {
+        Assert.Equal("Lumina — 720p60", ModoVideo.Hd60.Titulo);
+        Assert.Equal("Lumina — 1080p30", ModoVideo.FullHd30.Titulo);
+    }
+
     [Theory]
     [InlineData("1080p30", "1080p30")]
     [InlineData("720p60", "720p60")]

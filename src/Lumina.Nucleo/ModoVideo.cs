@@ -10,4 +10,7 @@ public sealed record ModoVideo(string Nome, int Largura, int Altura, int Fps)
     public static ModoVideo PorNome(string? nome) => nome == FullHd30.Nome ? FullHd30 : Hd60;
 
     public ModoVideo Alternar() => this == Hd60 ? FullHd30 : Hd60;
+
+    /// <summary>O modo fica à vista: o Douglas jogou 20 min em 1080p30 sem perceber (03/10/2026).</summary>
+    public string Titulo => $"Lumina — {Nome}";
 }

@@ -53,7 +53,7 @@ sealed class JanelaPrincipal : Form
         _config = _armazem.Ler();
         _modo = ModoVideo.PorNome(_config.Modo);
 
-        Text = "Lumina";
+        Text = _modo.Titulo;
         using (var icone = typeof(JanelaPrincipal).Assembly.GetManifestResourceStream("lumina.ico")!) Icon = new Icon(icone);
         BackColor = Color.Black;
         KeyPreview = true;
@@ -173,6 +173,7 @@ sealed class JanelaPrincipal : Form
     {
         if (modo == _modo || _captura is null) return;
         _modo = modo;
+        Text = _modo.Titulo;
         OnResize(EventArgs.Empty);
         _captura.Iniciar(_modo);
         SalvarConfiguracao();
