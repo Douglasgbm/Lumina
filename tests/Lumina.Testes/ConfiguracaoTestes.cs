@@ -20,13 +20,14 @@ public sealed class ConfiguracaoTestes : IDisposable
         Assert.Equal("720p60", c.Modo);
         Assert.False(c.TelaCheia);
         Assert.False(c.Maximizada);
+        Assert.True(c.ModoSuave);
     }
 
     [Fact]
     public void Salva_e_le_igual_criando_a_pasta()
     {
         var armazem = new ArmazemConfiguracao(Caminho);
-        var c = new Configuracao { X = 2000, Y = 40, Largura = 1600, Altura = 900, Maximizada = true, TelaCheia = true, Modo = "1080p30", SaidaFixaId = "{0.0.0}.{x}", Volume = 0.5f, Mudo = true };
+        var c = new Configuracao { X = 2000, Y = 40, Largura = 1600, Altura = 900, Maximizada = true, TelaCheia = true, Modo = "1080p30", SaidaFixaId = "{0.0.0}.{x}", Volume = 0.5f, Mudo = true, ModoSuave = false };
         armazem.Salvar(c);
         Assert.Equal(c, armazem.Ler());
         Assert.False(File.Exists(Caminho + ".tmp"));

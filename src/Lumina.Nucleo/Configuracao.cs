@@ -16,6 +16,8 @@ public sealed record Configuracao
     public string? SaidaFixaId { get; init; }
     public float Volume { get; init; } = 1f;
     public bool Mudo { get; init; }
+    /// <summary>Mostra no ritmo do monitor com uma fila curta (como o OBS); falso = cada quadro na hora que chega.</summary>
+    public bool ModoSuave { get; init; } = true;
 
     /// <summary>Corrige valores fora do possível (arquivo editado à mão, versão antiga).</summary>
     public Configuracao Saneada() => this with
