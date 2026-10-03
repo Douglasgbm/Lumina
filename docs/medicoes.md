@@ -45,3 +45,13 @@ Teste de tom (1000/1500 Hz) impossível sem o HDMI do PC na placa; decisão: pro
 | saída | Alto-falantes (Realtek(R) Audio), a padrão do Windows |
 | canais esquerdo × direito (diagnóstico, som do jogo) | diferentes entre si o tempo todo (ex.: 1253 × 994 Hz), coerente com estéreo real |
 | ouvido do Douglas | "som normal e junto com a imagem" |
+
+## Andar 5 — sem sinal e reconexão (03/10/2026 ~12:05)
+
+| Situação | Resultado |
+|---|---|
+| Switch desligado e religado | imagem volta sozinha (Douglas) |
+| USB da placa tirado e recolocado | erro às 12:05:33 nos dois; áudio volta 12:05:41, vídeo 12:05:48, sem fechar nada |
+| Webcam com o Lumina aberto | funciona (Douglas) |
+| Headset fixado desligado no meio | **pendente** (não testado) |
+| Volta sozinho ao fechar o ffplay | **pendente**; parcial às 11:41: com o ffplay aberto o Lumina recebe `MF_E_HW_MFT_FAILED_START_STREAMING` e tenta de novo a cada 2 s |
