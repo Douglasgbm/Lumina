@@ -25,6 +25,7 @@ sealed class JanelaPrincipal : Form
     ModoVideo _modo;
     Configuracao _config;
     Rectangle _limitesNormais;
+    bool _maximizadaAntesDaTelaCheia;
     bool _telaCheia;
 
     // Diagnóstico
@@ -49,6 +50,7 @@ sealed class JanelaPrincipal : Form
         var r = Enquadramento.GarantirVisivel(new Retangulo(_config.X, _config.Y, _config.Largura, _config.Altura),
             telas, Para(Screen.PrimaryScreen!.WorkingArea));
         Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
+        if (_config.Maximizada) WindowState = FormWindowState.Maximized;
         Controls.Add(_painel);
 
         ContextMenuStrip = MontarMenu();
@@ -118,6 +120,7 @@ sealed class JanelaPrincipal : Form
         if (!_telaCheia)
         {
             _limitesNormais = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            _maximizadaAntesDaTelaCheia = WindowState == FormWindowState.Maximized;
             var monitor = Screen.FromControl(this).Bounds;
             WindowState = FormWindowState.Normal;
             FormBorderStyle = FormBorderStyle.None;
@@ -128,6 +131,7 @@ sealed class JanelaPrincipal : Form
         {
             FormBorderStyle = FormBorderStyle.Sizable;
             Bounds = _limitesNormais;
+            if (_maximizadaAntesDaTelaCheia) WindowState = FormWindowState.Maximized;
             _telaCheia = false;
         }
         SalvarConfiguracao();
@@ -210,6 +214,7 @@ sealed class JanelaPrincipal : Form
             Y = normal.Y,
             Largura = normal.Width,
             Altura = normal.Height,
+            Maximizada = _telaCheia ? _maximizadaAntesDaTelaCheia : WindowState == FormWindowState.Maximized,
             TelaCheia = _telaCheia,
             Modo = _modo.Nome,
             SaidaFixaId = _audio?.SaidaFixaId,

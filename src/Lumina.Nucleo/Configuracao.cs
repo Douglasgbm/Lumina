@@ -9,6 +9,8 @@ public sealed record Configuracao
     public int Y { get; init; } = 100;
     public int Largura { get; init; } = 1280;
     public int Altura { get; init; } = 720;
+    /// <summary>Maximizada pelo botão do Windows; X/Y/Largura/Altura guardam o tamanho de quando não está.</summary>
+    public bool Maximizada { get; init; }
     public bool TelaCheia { get; init; }
     public string Modo { get; init; } = ModoVideo.Hd60.Nome;
     public string? SaidaFixaId { get; init; }
