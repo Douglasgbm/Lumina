@@ -35,7 +35,11 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
         _enumerador.RegisterEndpointNotificationCallback(this);
     }
 
-    public bool Ativo => _captura is not null;
+    /// <summary>
+    /// Entrada E saída de pé. Se uma falhar (placa sumiu, saída em uso exclusivo, permissão), fica falso
+    /// e a janela tenta Iniciar de novo; antes ficava "ativo" e mudo para sempre (revisão final).
+    /// </summary>
+    public bool Ativo => _captura is not null && _saida is not null;
 
     public float Volume
     {
@@ -102,8 +106,16 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
             _ui.Post(_ => { if (ReferenceEquals(_captura, captura)) Parar(); }, null);
         };
         _captura = captura;
-        captura.StartRecording();
-        IniciarSaida();
+        try
+        {
+            captura.StartRecording();
+            IniciarSaida();
+        }
+        catch
+        {
+            Parar();
+            throw;
+        }
     }
 
     public void Parar()

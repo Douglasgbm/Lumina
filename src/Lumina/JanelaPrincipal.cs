@@ -124,8 +124,16 @@ sealed class JanelaPrincipal : Form
     {
         _vigia.Stop();
         SalvarConfiguracao();
-        _captura?.Dispose();
+        Hide(); // some na hora, mesmo se a captura levar até 3 s para soltar a placa
+        bool capturaParou = _captura?.Parar() ?? true;
         _audio?.Dispose();
+        if (!capturaParou)
+        {
+            // A thread ainda está abrindo a placa e vai usar a tela: desmontar agora derruba o processo.
+            // A configuração já foi salva; encerrar direto é o caminho seguro.
+            Registro.Log("fechando sem desmontar a tela: a captura ainda estava abrindo a placa");
+            Environment.Exit(0);
+        }
         _tela?.Dispose();
         base.OnFormClosing(e);
     }

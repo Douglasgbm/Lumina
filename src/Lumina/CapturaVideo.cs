@@ -12,10 +12,7 @@ sealed class CapturaVideo : IDisposable
 {
     readonly Renderizador _tela;
     readonly Action<double>? _aoQuadro;
-    readonly object _trava = new();
-    Thread? _fio;
-    volatile bool _parar;
-    IMFMediaSource? _fonte;
+    readonly Revezamento _revezamento = new("captura");
     long _ultimoQuadro; // Environment.TickCount64; 0 = nenhum ainda
 
     /// <param name="aoQuadro">Recebe o atraso em ms entre a chegada do quadro e o envio dele para a tela.</param>
@@ -35,39 +32,42 @@ sealed class CapturaVideo : IDisposable
         }
     }
 
+    /// <summary>
+    /// Não espera: a thread anterior é avisada e a nova só começa quando ela terminar (abrir leva ~4 s).
+    /// Antes, trocar de modo durante a abertura deixava duas capturas disputando a placa (revisão final).
+    /// </summary>
     public void Iniciar(ModoVideo modo)
     {
-        Parar();
-        _parar = false;
         Interlocked.Exchange(ref _ultimoQuadro, 0);
-        _fio = new Thread(() => Laco(modo)) { IsBackground = true, Name = "captura" };
-        _fio.Start();
+        _revezamento.Iniciar(vez => Laco(modo, vez));
     }
 
     /// <summary>
     /// Só avisa: a thread sai no próximo quadro, e a placa manda quadros mesmo sem sinal (60 fps, medido em 03/10/2026).
     /// Desligar a fonte daqui travava o ReadSample até o limite de 3 s (medido 3 de 3 vezes).
+    /// Falso: a thread ainda está presa abrindo a placa — quem chama não deve desmontar a tela.
     /// </summary>
-    public void Parar()
+    public bool Parar()
     {
-        _parar = true;
-        if (_fio is not null && !_fio.Join(3000)) Registro.Log("captura: a thread não terminou em 3 s");
-        _fio = null;
+        bool terminou = _revezamento.Parar(TimeSpan.FromSeconds(3));
+        if (!terminou) Registro.Log("captura: a thread não terminou em 3 s");
+        return terminou;
     }
 
     public void Dispose() => Parar();
 
-    void Laco(ModoVideo modo)
+    void Laco(ModoVideo modo, Revezamento.Vez vez)
     {
-        while (!_parar)
+        while (!vez.Parar)
         {
+            IMFMediaSource? fonte = null;
             IMFSourceReader? leitor = null;
             try
             {
-                leitor = Abrir(modo);
-                while (!_parar && LerUm(leitor)) { }
+                leitor = Abrir(modo, vez, out fonte);
+                while (!vez.Parar && LerUm(leitor)) { }
             }
-            catch (Exception e) when (!_parar)
+            catch (Exception e) when (!vez.Parar)
             {
                 Registro.Erro("captura", e);
             }
@@ -78,26 +78,25 @@ sealed class CapturaVideo : IDisposable
             finally
             {
                 leitor?.Dispose();
-                lock (_trava)
+                if (fonte is not null)
                 {
-                    try { _fonte?.Shutdown(); } catch (Exception) { }
-                    _fonte?.Dispose();
-                    _fonte = null;
+                    try { fonte.Shutdown(); } catch (Exception) { }
+                    fonte.Dispose();
                 }
             }
-            for (int i = 0; i < 20 && !_parar; i++) Thread.Sleep(100);
+            for (int i = 0; i < 20 && !vez.Parar; i++) Thread.Sleep(100);
         }
     }
 
-    IMFSourceReader Abrir(ModoVideo modo)
+    IMFSourceReader Abrir(ModoVideo modo, Revezamento.Vez vez, out IMFMediaSource? fonte)
     {
+        fonte = null;
         var link = ProcurarPlaca() ?? throw new InvalidOperationException("placa não conectada");
         using var fa = MediaFactory.MFCreateAttributes(2);
         fa.Set(CaptureDeviceAttributeKeys.SourceType, CaptureDeviceAttributeKeys.SourceTypeVidcap);
         fa.Set(CaptureDeviceAttributeKeys.SourceTypeVidcapSymbolicLink, link);
-        var fonte = MediaFactory.MFCreateDeviceSource(fa);
-        lock (_trava) _fonte = fonte;
-        if (_parar) throw new OperationCanceledException();
+        fonte = MediaFactory.MFCreateDeviceSource(fa);
+        if (vez.Parar) throw new OperationCanceledException();
 
         // Fixa o formato nativo MJPG do modo; sem isso o leitor pode escolher NV12 (decodificado na CPU).
         using (var pd = fonte.CreatePresentationDescriptor())
@@ -118,6 +117,7 @@ sealed class CapturaVideo : IDisposable
                 mth.CurrentMediaType = escolhido;
             }
         }
+        if (vez.Parar) throw new OperationCanceledException();
 
         using var atr = MediaFactory.MFCreateAttributes(4);
         atr.Set(SourceReaderAttributeKeys.D3DManager, _tela.Gerente);
@@ -125,13 +125,21 @@ sealed class CapturaVideo : IDisposable
         atr.Set(SourceReaderAttributeKeys.EnableAdvancedVideoProcessing, true);
         atr.Set(SinkWriterAttributeKeys.LowLatency, true);
         var leitor = MediaFactory.MFCreateSourceReaderFromMediaSource(fonte, atr);
-
-        // ARGB32 vira textura B8G8R8A8, o mesmo formato da cadeia de imagens: a cópia é direta.
-        using var pedido = MediaFactory.MFCreateMediaType();
-        pedido.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);
-        pedido.Set(MediaTypeAttributeKeys.Subtype, VideoFormatGuids.Argb32);
-        MediaFactory.MFSetAttributeSize(pedido, MediaTypeAttributeKeys.FrameSize, (uint)modo.Largura, (uint)modo.Altura);
-        leitor.SetCurrentMediaType(SourceReaderIndex.FirstVideoStream, pedido);
+        try
+        {
+            // ARGB32 vira textura B8G8R8A8, o mesmo formato da cadeia de imagens: a cópia é direta.
+            using var pedido = MediaFactory.MFCreateMediaType();
+            pedido.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);
+            pedido.Set(MediaTypeAttributeKeys.Subtype, VideoFormatGuids.Argb32);
+            MediaFactory.MFSetAttributeSize(pedido, MediaTypeAttributeKeys.FrameSize, (uint)modo.Largura, (uint)modo.Altura);
+            leitor.SetCurrentMediaType(SourceReaderIndex.FirstVideoStream, pedido);
+            if (vez.Parar) throw new OperationCanceledException();
+        }
+        catch
+        {
+            leitor.Dispose();
+            throw;
+        }
         Registro.Log($"captura aberta: {modo.Nome}");
         return leitor;
     }
