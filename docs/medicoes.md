@@ -1,0 +1,36 @@
+# Medições
+
+## Andar 0 — régua (03/10/2026 11:07–11:18)
+
+A bancada do plano (HDMI do PC na placa + cronômetro) não pôde ser montada: há um só cabo HDMI,
+do dock do Switch direto na MS2109. Decisão do Douglas: provar o andar 1 por medição interna (B)
+e teste de uso, sem atraso absoluto.
+
+Fonte: Switch 2 no menu, medido com `ferramentas/regua/fps.ps1` (quadros diferentes por segundo).
+
+| Medida | Valor |
+|---|---|
+| fps real 1280x720 pedido a 60 | 60,0 |
+| fps real 1920x1080 pedido a 60 | 30,0 — a placa anuncia 60 e repete cada quadro |
+| fps real 1920x1080 pedido a 30 | 30,2 |
+| atraso absoluto da placa | não medido (sem 2º cabo); suposição do desenho: 50–100 ms |
+
+Outros fatos medidos:
+- Sem sinal (Switch desligado) a MS2109 continua mandando ~60 quadros por segundo.
+- A placa aceita um programa por vez: com o Lumina aberto o ffplay falha ("already in use");
+  com o ffplay aberto o Lumina recebe `MF_E_HW_MFT_FAILED_START_STREAMING` e tenta de novo a cada 2 s.
+
+## Andar 1 — Lumina só imagem (03/10/2026 11:38 e teste de uso ~11:45)
+
+`--diagnostico`, Switch ligado, 720p60. O atraso é do tempo da amostra (início da chegada do
+quadro pelo USB, relógio QPC) até o `Present`; a placa marca o fim da chegada ~16 ms depois.
+
+| Medida | Valor |
+|---|---|
+| fps no diagnóstico (720p60) | 59,5–60,5 |
+| atraso chegada→tela, mediana | 17,6–20,0 ms |
+| atraso chegada→tela, p95 | 27–39 ms |
+| atraso chegada→tela, máximo | 37–66 ms (66 no primeiro bloco) |
+| parte só do Lumina (descomprimir + copiar + apresentar) | ≈ 2–4 ms |
+| fechar com o Switch desligado | thread termina ~0,3 s após o X (3 de 3) |
+| teste de uso (Douglas, Monster Hunter) | "fluindo bem, não vejo problemas" |
