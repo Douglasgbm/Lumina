@@ -64,3 +64,17 @@ Auto-Sandbox do Norton 360 (`C:\ProgramData\Norton\Antivirus\log\autosandbox.log
 câmera. Nas seguintes entra na lista de exceções e funciona. Bate com todas as recusas (10:16, 10:51,
 11:31–11:35, 13:16) e todos os sucessos do dia. Às 13:37 a câmera abriu inclusive pelo terminal do Claude.
 A tela "sem sinal" agora diz "Acesso à câmera negado" e sugere abrir de novo.
+
+## O "degrau de +18 ms" do modo suave era a régua (03/10/2026 14:10–14:24, 1080p30, Diablo 4)
+
+Medida a chegada contra os 3 carimbos de cada quadro (MF, `DeviceTimestamp` e `{d06f8a46-…}` da placa):
+às 14:12:01 só o do **MF** pulou (chegada 36,7 → 46 ms); os dois da placa ficaram parados
+(dispositivo ~35–37 ms, d06 ~3–5 ms = fim da chegada) por 13 min. O MF reancora o carimbo que ele fabrica.
+
+| Período | Exibição contra o MF | Exibição contra a PLACA | Fila |
+|---|---|---|---|
+| 14:11–14:12 (antes) | 62,9 ms | **68,7 ms** | 55 ms |
+| 14:12–14:16 (depois) | 66,1 ms | **62,5 ms** | 57 ms |
+
+Atraso real não subiu. Em 1080p30 o modo suave fica ~62–69 ms depois do início do quadro na placa
+(o quadro de 1080p leva ~33 ms para chegar pelo USB). Melhoria possível, não feita: agendar pelo carimbo da placa.
