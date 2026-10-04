@@ -33,8 +33,10 @@ sealed class JanelaPrincipal : Form
     Renderizador? _tela;
     CapturaVideo? _captura;
     MotorAudio? _audio;
-    ModoVideo _modo;
     Configuracao _config;
+    DispositivoVideo? _placa;             // aberta agora; null = nenhuma (ver _semPlaca)
+    MotivoSemPlaca? _semPlaca;
+    int _tiquesSemPlaca;
     Rectangle _limitesNormais;
     bool _maximizadaAntesDaTelaCheia;
     bool _telaCheia;
@@ -51,9 +53,8 @@ sealed class JanelaPrincipal : Form
         _diagnostico = diagnostico;
         _forcarMudo = forcarMudo;
         _config = _armazem.Ler();
-        _modo = ModoVideo.PorNome(_config.Modo);
 
-        Text = _modo.Titulo;
+        Text = "Lumina";
         using (var icone = typeof(JanelaPrincipal).Assembly.GetManifestResourceStream("lumina.ico")!) Icon = new Icon(icone);
         BackColor = Color.Black;
         KeyPreview = true;
@@ -83,16 +84,15 @@ sealed class JanelaPrincipal : Form
         if (_diagnostico) _tela.AoExibir = AoQuadro;
         if (_config.ModoSuave) _tela.IniciarSuave();
         _captura = new CapturaVideo(_tela, _diagnostico ? AoQuadro : null);
-        _captura.Iniciar(_modo);
 
         _audio = new MotorAudio(SynchronizationContext.Current!, _diagnostico ? AoBlocoAudio : null)
         {
             Volume = _config.Volume,
             Mudo = _config.Mudo || _forcarMudo,
+            EntradaEscolhida = _config.EntradaSom,
         };
         _audio.SaidaFixaId = _config.SaidaFixaId;
-        try { _audio.Iniciar(); }
-        catch (Exception ex) { Registro.Erro("áudio.iniciar", ex); }
+        ProcurarPlaca();
         _vigia.Start();
     }
 
@@ -105,7 +105,8 @@ sealed class JanelaPrincipal : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        var r = Enquadramento.Encaixar(ClientSize.Width, ClientSize.Height, _modo.Largura, _modo.Altura);
+        var modo = _captura?.ModoAtual ?? ModoVideo.Hd60;
+        var r = Enquadramento.Encaixar(ClientSize.Width, ClientSize.Height, modo.Largura, modo.Altura);
         _painel.Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
     }
 
@@ -173,12 +174,61 @@ sealed class JanelaPrincipal : Form
 
     void TrocarModo(ModoVideo modo)
     {
-        if (modo == _modo || _captura is null) return;
-        _modo = modo;
-        Text = _modo.Titulo;
-        OnResize(EventArgs.Empty);
-        _captura.Iniciar(_modo);
+        if (_captura is null || _placa is null || modo == _captura.ModoAtual) return;
+        _config = _config with { Modo = modo.Nome };
+        _captura.Iniciar(_placa, modo.Nome);
         SalvarConfiguracao();
+    }
+
+    // --- placa e entrada de som
+
+    /// <summary>Resolve a placa pela escolha salva (ou a MS2109) e, se achou, abre imagem e som dela.</summary>
+    void ProcurarPlaca()
+    {
+        if (_captura is null || _audio is null) return;
+        var r = Placa.Resolver(Dispositivos.Video(), _config.PlacaLink, _config.PlacaNome);
+        _semPlaca = r.Motivo;
+        if (r.Placa is null || r.Placa == _placa) return;
+        _placa = r.Placa;
+        _captura.Iniciar(_placa, _config.Modo);
+        ReiniciarAudio();
+    }
+
+    void EscolherPlaca(DispositivoVideo placa)
+    {
+        if (_captura is null || _audio is null) return;
+        _config = _config with { PlacaLink = placa.Link, PlacaNome = placa.Nome };
+        var r = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome);
+        _semPlaca = r.Motivo;
+        _placa = r.Placa;
+        if (_placa is not null)
+        {
+            _captura.Iniciar(_placa, _config.Modo); // o revezamento troca sem travar a janela
+            ReiniciarAudio();
+        }
+        else
+        {
+            // Sumiu entre abrir o menu e clicar: para a placa antiga (raro; pode esperar até 3 s).
+            _captura.Parar();
+            _audio.Parar();
+        }
+        SalvarConfiguracao();
+    }
+
+    void EscolherEntrada(string? entrada)
+    {
+        _config = _config with { EntradaSom = entrada };
+        ReiniciarAudio();
+        SalvarConfiguracao();
+    }
+
+    void ReiniciarAudio()
+    {
+        if (_audio is null) return;
+        _audio.Placa = _placa;
+        _audio.EntradaEscolhida = _config.EntradaSom;
+        try { _audio.Iniciar(); }
+        catch (Exception ex) { Registro.Erro("áudio.iniciar", ex); }
     }
 
     ContextMenuStrip MontarMenu()
@@ -187,14 +237,31 @@ sealed class JanelaPrincipal : Form
         menu.Opening += (_, _) =>
         {
             menu.Items.Clear();
-            foreach (var m in new[] { ModoVideo.Hd60, ModoVideo.FullHd30 })
-                menu.Items.Add(new ToolStripMenuItem(m.Nome, null, (_, _) => TrocarModo(m)) { Checked = m == _modo });
+            var placas = new ToolStripMenuItem("Placa");
+            foreach (var d in Dispositivos.Video())
+                placas.DropDownItems.Add(new ToolStripMenuItem(d.Nome, null, (_, _) => EscolherPlaca(d))
+                { Checked = _placa is not null && string.Equals(d.Link, _placa.Link, StringComparison.OrdinalIgnoreCase) });
+            if (placas.DropDownItems.Count == 0) placas.DropDownItems.Add(new ToolStripMenuItem("(nenhuma câmera encontrada)") { Enabled = false });
+            menu.Items.Add(placas);
+            foreach (var m in _captura?.ModosDaPlaca ?? [])
+                menu.Items.Add(new ToolStripMenuItem(m.Nome, null, (_, _) => TrocarModo(m)) { Checked = m == _captura?.ModoAtual });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Modo suave (como o OBS)", null, (_, _) => DefinirSuave(true))
             { Checked = _tela?.Suave == true });
             menu.Items.Add(new ToolStripMenuItem("Menor atraso", null, (_, _) => DefinirSuave(false))
             { Checked = _tela?.Suave == false });
             menu.Items.Add(new ToolStripSeparator());
+
+            var entrada = new ToolStripMenuItem("Entrada de som");
+            entrada.DropDownItems.Add(new ToolStripMenuItem("Automático (da placa)", null, (_, _) => EscolherEntrada(null))
+            { Checked = _config.EntradaSom is null });
+            if (_audio is not null)
+                foreach (var e in _audio.Entradas())
+                    entrada.DropDownItems.Add(new ToolStripMenuItem(e.Nome, null, (_, _) => EscolherEntrada(e.Id))
+                    { Checked = _config.EntradaSom == e.Id });
+            entrada.DropDownItems.Add(new ToolStripMenuItem("Nenhuma", null, (_, _) => EscolherEntrada(EntradaSom.Nenhuma))
+            { Checked = _config.EntradaSom == EntradaSom.Nenhuma });
+            menu.Items.Add(entrada);
 
             var saida = new ToolStripMenuItem("Saída de som");
             saida.DropDownItems.Add(new ToolStripMenuItem("Padrão do Windows", null, (_, _) => FixarSaida(null))
@@ -247,8 +314,18 @@ sealed class JanelaPrincipal : Form
 
     void Vigiar()
     {
-        bool semSinal = _captura is null || _captura.MsDesdeUltimoQuadro > 1000;
-        var texto = Problemas.Mensagem(_captura?.Problema ?? ProblemaCaptura.Nenhum);
+        if (_placa is null && ++_tiquesSemPlaca >= 4)
+        {
+            _tiquesSemPlaca = 0;
+            try { ProcurarPlaca(); }
+            catch (Exception ex) { Registro.Erro("placa.procurar", ex); }
+        }
+        var titulo = _captura?.ModoAtual is { } modo && _placa is not null ? modo.Titulo : "Lumina";
+        if (Text != titulo) { Text = titulo; OnResize(EventArgs.Empty); }
+
+        bool semSinal = _captura is null || _placa is null || _captura.MsDesdeUltimoQuadro > 1000;
+        var problema = _placa is null && _semPlaca is { } motivo ? Problemas.De(motivo) : _captura?.Problema ?? ProblemaCaptura.Nenhum;
+        var texto = Problemas.Mensagem(problema, _config.PlacaNome);
         if (_semSinal.Text != texto) _semSinal.Text = texto;
         if (_semSinal.Visible != semSinal)
         {
@@ -257,7 +334,7 @@ sealed class JanelaPrincipal : Form
             if (semSinal) _semSinal.BringToFront();
         }
 
-        if (_audio is not null && !_audio.Ativo && ++_tiquesSemAudio >= 4)
+        if (_audio is not null && _placa is not null && !_audio.Ativo && _config.EntradaSom != EntradaSom.Nenhuma && ++_tiquesSemAudio >= 4)
         {
             _tiquesSemAudio = 0;
             try { _audio.Iniciar(); }
@@ -278,7 +355,6 @@ sealed class JanelaPrincipal : Form
             Altura = normal.Height,
             Maximizada = _telaCheia ? _maximizadaAntesDaTelaCheia : WindowState == FormWindowState.Maximized,
             TelaCheia = _telaCheia,
-            Modo = _modo.Nome,
             SaidaFixaId = _audio?.SaidaFixaId,
             Volume = _audio?.Volume ?? _config.Volume,
             Mudo = _forcarMudo ? _config.Mudo : _audio?.Mudo ?? _config.Mudo,

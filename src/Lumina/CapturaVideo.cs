@@ -5,8 +5,9 @@ using Vortice.MediaFoundation;
 namespace Lumina;
 
 /// <summary>
-/// Lê a placa numa thread própria e entrega cada quadro direto na tela, sem fila.
+/// Lê a placa escolhida numa thread própria e entrega cada quadro à tela.
 /// Placa ausente, em uso ou desconectada: espera 2 s e tenta de novo, até Parar.
+/// Ao abrir, publica os modos que a placa oferece (para o menu) e o modo em uso (para o título).
 /// </summary>
 sealed class CapturaVideo : IDisposable
 {
@@ -16,8 +17,17 @@ sealed class CapturaVideo : IDisposable
     readonly ResumoAtraso _chegada = new();
     long _ultimoQuadro; // Environment.TickCount64; 0 = nenhum ainda
     volatile ProblemaCaptura _problema;
+    volatile IReadOnlyList<ModoVideo> _modos = [];
+    volatile ModoVideo? _modoAtual;
 
     sealed class PlacaNaoConectada() : Exception("placa não conectada");
+    sealed class SemModoUtil() : Exception("a câmera não tem modo 16:9 de 720p ou mais");
+
+    /// <summary>Os modos da placa aberta por último (vazio antes de abrir).</summary>
+    public IReadOnlyList<ModoVideo> ModosDaPlaca => _modos;
+
+    /// <summary>O modo aberto agora; null antes de abrir.</summary>
+    public ModoVideo? ModoAtual => _modoAtual;
 
     /// <summary>O último problema ao abrir ou ler a placa; Nenhum quando chegou quadro.</summary>
     public ProblemaCaptura Problema => _problema;
@@ -43,10 +53,11 @@ sealed class CapturaVideo : IDisposable
     /// Não espera: a thread anterior é avisada e a nova só começa quando ela terminar (abrir leva ~4 s).
     /// Antes, trocar de modo durante a abertura deixava duas capturas disputando a placa (revisão final).
     /// </summary>
-    public void Iniciar(ModoVideo modo)
+    /// <param name="modoDesejado">Nome do modo ("720p60"); se a placa não tiver, Modos.Escolher decide.</param>
+    public void Iniciar(DispositivoVideo placa, string? modoDesejado)
     {
         Interlocked.Exchange(ref _ultimoQuadro, 0);
-        _revezamento.Iniciar(vez => Laco(modo, vez));
+        _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez));
     }
 
     /// <summary>
@@ -63,7 +74,7 @@ sealed class CapturaVideo : IDisposable
 
     public void Dispose() => Parar();
 
-    void Laco(ModoVideo modo, Revezamento.Vez vez)
+    void Laco(DispositivoVideo placa, string? modoDesejado, Revezamento.Vez vez)
     {
         while (!vez.Parar)
         {
@@ -71,7 +82,7 @@ sealed class CapturaVideo : IDisposable
             IMFSourceReader? leitor = null;
             try
             {
-                leitor = Abrir(modo, vez, out fonte);
+                leitor = Abrir(placa, modoDesejado, vez, out fonte);
                 while (!vez.Parar && LerUm(leitor)) { }
             }
             catch (Exception e) when (!vez.Parar)
@@ -80,6 +91,7 @@ sealed class CapturaVideo : IDisposable
                 _problema = e switch
                 {
                     PlacaNaoConectada => ProblemaCaptura.PlacaAusente,
+                    SemModoUtil => ProblemaCaptura.SemModoUtil,
                     SharpGen.Runtime.SharpGenException s => Problemas.DeHResult(s.HResult),
                     _ => ProblemaCaptura.Outro,
                 };
@@ -101,17 +113,19 @@ sealed class CapturaVideo : IDisposable
         }
     }
 
-    IMFSourceReader Abrir(ModoVideo modo, Revezamento.Vez vez, out IMFMediaSource? fonte)
+    IMFSourceReader Abrir(DispositivoVideo placa, string? modoDesejado, Revezamento.Vez vez, out IMFMediaSource? fonte)
     {
         fonte = null;
-        var link = ProcurarPlaca() ?? throw new PlacaNaoConectada();
+        // Acha a placa de novo a cada abertura: pode ter mudado de porta USB (link novo, mesmo nome e modelo).
+        var link = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome).Placa?.Link ?? throw new PlacaNaoConectada();
         using var fa = MediaFactory.MFCreateAttributes(2);
         fa.Set(CaptureDeviceAttributeKeys.SourceType, CaptureDeviceAttributeKeys.SourceTypeVidcap);
         fa.Set(CaptureDeviceAttributeKeys.SourceTypeVidcapSymbolicLink, link);
         fonte = MediaFactory.MFCreateDeviceSource(fa);
         if (vez.Parar) throw new OperationCanceledException();
 
-        // Fixa o formato nativo MJPG do modo; sem isso o leitor pode escolher NV12 (decodificado na CPU).
+        // Fixa o formato nativo do modo, preferindo MJPG; sem isso o leitor pode escolher NV12 (decodificado na CPU).
+        ModoVideo modo;
         using (var pd = fonte.CreatePresentationDescriptor())
         {
             pd.GetStreamDescriptorByIndex(0, out _, out IMFStreamDescriptor sd);
@@ -124,8 +138,10 @@ sealed class CapturaVideo : IDisposable
                     using var t = mth.GetMediaTypeByIndex(i);
                     formatos.Add(Descrever(i, t));
                 }
-                int indice = Placa.EscolherFormatoNativo(formatos, modo)
-                    ?? throw new InvalidOperationException($"a placa não oferece MJPG {modo.Nome}");
+                var modos = Modos.Disponiveis(formatos, link);
+                _modos = modos;
+                modo = Modos.Escolher(modos, modoDesejado) ?? throw new SemModoUtil();
+                int indice = Modos.FormatoPara(formatos, modo)!.Value;
                 using var escolhido = mth.GetMediaTypeByIndex(indice);
                 mth.CurrentMediaType = escolhido;
             }
@@ -153,7 +169,8 @@ sealed class CapturaVideo : IDisposable
             leitor.Dispose();
             throw;
         }
-        Registro.Log($"captura aberta: {modo.Nome}");
+        _modoAtual = modo;
+        Registro.Log($"captura aberta: {placa.Nome} {modo.Nome}");
         return leitor;
     }
 
@@ -192,14 +209,7 @@ sealed class CapturaVideo : IDisposable
         var sub = t.GetGUID(MediaTypeAttributeKeys.Subtype);
         MediaFactory.MFGetAttributeSize(t, MediaTypeAttributeKeys.FrameSize, out uint l, out uint a);
         MediaFactory.MFGetAttributeRatio(t, MediaTypeAttributeKeys.FrameRate, out uint n, out uint d);
-        return new FormatoNativo(indice, sub == VideoFormatGuids.Mjpg ? "MJPG" : sub.ToString(), (int)l, (int)a, (int)n, (int)d);
-    }
-
-    static string? ProcurarPlaca()
-    {
-        var lista = new List<DispositivoVideo>();
-        using (var ativos = MediaFactory.MFEnumVideoDeviceSources())
-            foreach (var a in ativos) lista.Add(new DispositivoVideo(a.FriendlyName, a.SymbolicLink));
-        return Placa.EscolherVideo(lista)?.Link;
+        string nome = sub == VideoFormatGuids.Mjpg ? "MJPG" : sub == VideoFormatGuids.NV12 ? "NV12" : sub == VideoFormatGuids.YUY2 ? "YUY2" : sub.ToString();
+        return new FormatoNativo(indice, nome, (int)l, (int)a, (int)n, (int)d);
     }
 }

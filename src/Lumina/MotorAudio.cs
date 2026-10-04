@@ -26,6 +26,13 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
     string? _saidaFixaId;
     float _nivel = 1f;
     bool _mudo;
+    string? _ultimoAviso;
+
+    /// <summary>A placa de vídeo em uso: a entrada automática é a do mesmo aparelho USB.</summary>
+    public DispositivoVideo? Placa { get; set; }
+
+    /// <summary>null = automático; EntradaSom.Nenhuma = sem som; ou o id de uma entrada.</summary>
+    public string? EntradaEscolhida { get; set; }
 
     /// <param name="aoBloco">Só no diagnóstico: recebe os canais esquerdo e direito já corrigidos.</param>
     public MotorAudio(SynchronizationContext ui, Action<float[], float[]>? aoBloco)
@@ -60,28 +67,34 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
         set { _saidaFixaId = value; if (Ativo) ReiniciarSaida(); }
     }
 
+    public List<DispositivoAudio> Entradas() =>
+        _enumerador.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .Select(d => new DispositivoAudio(d.ID, d.FriendlyName, Hardware(d))).ToList();
+
     public List<(string Id, string Nome)> Saidas() =>
         _enumerador.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).Select(d => (d.ID, d.FriendlyName)).ToList();
 
     public void Iniciar()
     {
         Parar();
-        var entradas = _enumerador.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).ToList();
-        var escolhido = Placa.EscolherAudio(entradas.Select(d => new DispositivoAudio(d.ID, d.FriendlyName, Hardware(d))).ToList());
+        var escolhido = EntradaSom.Resolver(EntradaEscolhida, Entradas(), Placa);
         if (escolhido is null)
         {
-            Registro.Log("áudio: placa não encontrada");
+            Avisar(EntradaEscolhida == EntradaSom.Nenhuma ? "áudio: sem som (escolhido no menu)" : "áudio: nenhuma entrada de som da placa encontrada");
             return;
         }
-        var dispositivo = entradas.First(d => d.ID == escolhido.Id);
+        var dispositivo = _enumerador.GetDevice(escolhido.Id);
 
         var captura = new WasapiCapture(dispositivo, true, 10);
         var bruto = captura.WaveFormat;
         bool flutuante = bruto.Encoding == WaveFormatEncoding.IeeeFloat
             || (bruto is WaveFormatExtensible x && x.SubFormat == SubtipoFloat);
-        var c = CorrecaoMs2109.Corrigir(new FormatoPcm(bruto.SampleRate, bruto.Channels, bruto.BitsPerSample, flutuante));
+        var anunciado = new FormatoPcm(bruto.SampleRate, bruto.Channels, bruto.BitsPerSample, flutuante);
+        // O defeito do 96 kHz mono é da MS2109; outras placas usam o formato como o Windows informa.
+        var c = Nucleo.Placa.EhMs2109(escolhido.Hardware) ? CorrecaoMs2109.Corrigir(anunciado) : anunciado;
         var formato = flutuante ? WaveFormat.CreateIeeeFloatWaveFormat(c.Taxa, c.Canais) : new WaveFormat(c.Taxa, c.Bits, c.Canais);
-        Registro.Log($"áudio: anunciado {bruto} → usado {formato}");
+        _ultimoAviso = null;
+        Registro.Log($"áudio: {escolhido.Nome}: anunciado {bruto} → usado {formato}");
 
         var fila = new BufferedWaveProvider(formato)
         {
@@ -138,6 +151,14 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
         _enumerador.UnregisterEndpointNotificationCallback(this);
         Parar();
         _enumerador.Dispose();
+    }
+
+    /// <summary>O vigia tenta de novo a cada 2 s: sem isso o mesmo aviso encheria o log.</summary>
+    void Avisar(string linha)
+    {
+        if (linha == _ultimoAviso) return;
+        _ultimoAviso = linha;
+        Registro.Log(linha);
     }
 
     void AplicarVolume()
