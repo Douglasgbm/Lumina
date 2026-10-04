@@ -45,4 +45,24 @@ public class ProblemasTestes
     {
         Assert.Equal("sem sinal", Problemas.Mensagem(p));
     }
+
+    [Fact]
+    public void Sem_placa_escolhida_ensina_onde_escolher()
+    {
+        Assert.Equal(ProblemaCaptura.NenhumaPlacaEscolhida, Problemas.De(MotivoSemPlaca.NenhumaEscolhida));
+        Assert.Contains("Placa", Problemas.Mensagem(ProblemaCaptura.NenhumaPlacaEscolhida));
+    }
+
+    [Fact]
+    public void Placa_escolhida_ausente_diz_o_nome_dela()
+    {
+        Assert.Equal(ProblemaCaptura.PlacaEscolhidaAusente, Problemas.De(MotivoSemPlaca.EscolhidaAusente));
+        Assert.Contains("\"Logi C270 HD WebCam\" não está conectada", Problemas.Mensagem(ProblemaCaptura.PlacaEscolhidaAusente, "Logi C270 HD WebCam"));
+    }
+
+    [Fact]
+    public void Camera_sem_modo_util_pede_outra_placa()
+    {
+        Assert.Contains("720p", Problemas.Mensagem(ProblemaCaptura.SemModoUtil));
+    }
 }

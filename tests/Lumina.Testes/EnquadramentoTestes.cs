@@ -2,33 +2,8 @@ using Lumina.Nucleo;
 
 namespace Lumina.Testes;
 
-public class ModoEEnquadramentoTestes
+public class EnquadramentoTestes
 {
-    [Fact]
-    public void Modo_alterna_entre_os_dois()
-    {
-        Assert.Equal(ModoVideo.FullHd30, ModoVideo.Hd60.Alternar());
-        Assert.Equal(ModoVideo.Hd60, ModoVideo.FullHd30.Alternar());
-    }
-
-    [Fact]
-    public void Titulo_da_janela_mostra_o_modo()
-    {
-        Assert.Equal("Lumina — 720p60", ModoVideo.Hd60.Titulo);
-        Assert.Equal("Lumina — 1080p30", ModoVideo.FullHd30.Titulo);
-    }
-
-    [Theory]
-    [InlineData("1080p30", "1080p30")]
-    [InlineData("720p60", "720p60")]
-    [InlineData("4k", "720p60")]
-    [InlineData("", "720p60")]
-    [InlineData(null, "720p60")]
-    public void Modo_por_nome_desconhecido_cai_no_padrao(string? nome, string esperado)
-    {
-        Assert.Equal(esperado, ModoVideo.PorNome(nome).Nome);
-    }
-
     [Fact]
     public void Encaixar_area_16_9_ocupa_tudo()
     {

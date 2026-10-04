@@ -29,3 +29,21 @@ public static class SaidaAudio
     public static string Resolver(string? fixaId, IReadOnlyCollection<string> disponiveis, string padraoId) =>
         fixaId is not null && disponiveis.Contains(fixaId) ? fixaId : padraoId;
 }
+
+public static class EntradaSom
+{
+    /// <summary>Valor guardado na configuração para "sem som".</summary>
+    public const string Nenhuma = "nenhuma";
+
+    /// <summary>
+    /// null = automático: a entrada do mesmo aparelho USB que a placa. "nenhuma" = sem som.
+    /// Uma entrada escolhida que sumiu volta ao automático (como a saída fixada que some volta à padrão).
+    /// </summary>
+    public static DispositivoAudio? Resolver(string? escolha, IReadOnlyList<DispositivoAudio> entradas, DispositivoVideo? placa)
+    {
+        if (escolha == Nenhuma) return null;
+        if (escolha is not null && entradas.FirstOrDefault(e => e.Id == escolha) is { } fixa) return fixa;
+        if (placa is null || IdUsb.De(placa.Link) is not { } video) return null;
+        return entradas.FirstOrDefault(e => IdUsb.De(e.Hardware) is { } a && a.MesmoAparelho(video));
+    }
+}

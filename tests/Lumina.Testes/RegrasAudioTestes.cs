@@ -51,4 +51,33 @@ public class RegrasAudioTestes
     {
         Assert.Equal("caixa", SaidaAudio.Resolver(null, ["headset", "caixa"], "caixa"));
     }
+
+    [Fact]
+    public void Entrada_automatica_e_a_do_mesmo_aparelho_da_placa()
+    {
+        var entradas = new[] { PlacaTestes.MicC270, PlacaTestes.Realtek, PlacaTestes.AudioMs2109 };
+        Assert.Equal(PlacaTestes.AudioMs2109, EntradaSom.Resolver(null, entradas, PlacaTestes.Ms2109));
+        Assert.Equal(PlacaTestes.MicC270, EntradaSom.Resolver(null, entradas, PlacaTestes.C270));
+    }
+
+    [Fact]
+    public void Entrada_automatica_sem_audio_do_aparelho_fica_sem_som()
+    {
+        Assert.Null(EntradaSom.Resolver(null, [PlacaTestes.Realtek], PlacaTestes.Ms2109));
+        Assert.Null(EntradaSom.Resolver(null, [PlacaTestes.AudioMs2109], null));
+    }
+
+    [Fact]
+    public void Entrada_escolhida_vence_e_nenhuma_e_sem_som()
+    {
+        var entradas = new[] { PlacaTestes.MicC270, PlacaTestes.Realtek, PlacaTestes.AudioMs2109 };
+        Assert.Equal(PlacaTestes.Realtek, EntradaSom.Resolver(PlacaTestes.Realtek.Id, entradas, PlacaTestes.Ms2109));
+        Assert.Null(EntradaSom.Resolver(EntradaSom.Nenhuma, entradas, PlacaTestes.Ms2109));
+    }
+
+    [Fact]
+    public void Entrada_escolhida_que_sumiu_volta_ao_automatico()
+    {
+        Assert.Equal(PlacaTestes.AudioMs2109, EntradaSom.Resolver("{id-que-sumiu}", [PlacaTestes.AudioMs2109], PlacaTestes.Ms2109));
+    }
 }

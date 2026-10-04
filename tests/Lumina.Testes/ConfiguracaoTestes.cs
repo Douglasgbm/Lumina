@@ -55,7 +55,28 @@ public sealed class ConfiguracaoTestes : IDisposable
         Assert.Equal(320, c.Largura);
         Assert.Equal(16384, c.Altura);
         Assert.Equal(1f, c.Volume);
-        Assert.Equal("720p60", c.Modo);
+        Assert.Equal("4k", c.Modo); // o modo depende da placa: quem cai no padrão é Modos.Escolher
+    }
+
+    [Theory]
+    [InlineData("{\"Modo\": \"\"}")]
+    [InlineData("{\"Modo\": null}")]
+    public void Modo_vazio_vira_720p60(string conteudo)
+    {
+        Directory.CreateDirectory(_pasta);
+        File.WriteAllText(Caminho, conteudo);
+        Assert.Equal("720p60", new ArmazemConfiguracao(Caminho).Ler().Modo);
+    }
+
+    [Fact]
+    public void Lembra_a_placa_e_a_entrada_de_som()
+    {
+        var armazem = new ArmazemConfiguracao(Caminho);
+        var c = new Configuracao { PlacaLink = PlacaTestes.C270.Link, PlacaNome = PlacaTestes.C270.Nome, EntradaSom = EntradaSom.Nenhuma };
+        armazem.Salvar(c);
+        Assert.Equal(c, armazem.Ler());
+        Assert.Null(new Configuracao().PlacaLink);
+        Assert.Null(new Configuracao().EntradaSom);
     }
 
     [Fact]

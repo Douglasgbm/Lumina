@@ -1,15 +1,12 @@
 namespace Lumina.Nucleo;
 
-/// <summary>Os dois modos que o botão alterna. Começa em 720p60 (decisão do Douglas, 03/10/2026).</summary>
-public sealed record ModoVideo(string Nome, int Largura, int Altura, int Fps)
+/// <summary>Um modo de imagem da placa. O nome ("720p60") é o que fica salvo na configuração.</summary>
+public sealed record ModoVideo(int Largura, int Altura, int Fps)
 {
-    public static readonly ModoVideo Hd60 = new("720p60", 1280, 720, 60);
-    public static readonly ModoVideo FullHd30 = new("1080p30", 1920, 1080, 30);
+    public static readonly ModoVideo Hd60 = new(1280, 720, 60);
+    public static readonly ModoVideo FullHd30 = new(1920, 1080, 30);
 
-    /// <summary>Nome desconhecido ou nulo cai no padrão.</summary>
-    public static ModoVideo PorNome(string? nome) => nome == FullHd30.Nome ? FullHd30 : Hd60;
-
-    public ModoVideo Alternar() => this == Hd60 ? FullHd30 : Hd60;
+    public string Nome => $"{Altura}p{Fps}";
 
     /// <summary>O modo fica à vista: o Douglas jogou 20 min em 1080p30 sem perceber (03/10/2026).</summary>
     public string Titulo => $"Lumina — {Nome}";

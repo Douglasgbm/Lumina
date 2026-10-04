@@ -18,14 +18,22 @@ public sealed record Configuracao
     public bool Mudo { get; init; }
     /// <summary>Mostra no ritmo do monitor com uma fila curta (como o OBS); falso = cada quadro na hora que chega.</summary>
     public bool ModoSuave { get; init; } = true;
+    /// <summary>A placa escolhida no menu; null = nenhuma escolhida (usa a MS2109 se estiver conectada).</summary>
+    public string? PlacaLink { get; init; }
+    public string? PlacaNome { get; init; }
+    /// <summary>null = automático (a do aparelho da placa); "nenhuma" = sem som; ou o id da entrada.</summary>
+    public string? EntradaSom { get; init; }
 
-    /// <summary>Corrige valores fora do possível (arquivo editado à mão, versão antiga).</summary>
+    /// <summary>
+    /// Corrige valores fora do possível (arquivo editado à mão, versão antiga). O modo não é conferido aqui:
+    /// depende da placa — um nome que a placa não tem cai no padrão em Modos.Escolher.
+    /// </summary>
     public Configuracao Saneada() => this with
     {
         Largura = Math.Clamp(Largura, 320, 16384),
         Altura = Math.Clamp(Altura, 180, 16384),
         Volume = float.IsFinite(Volume) ? Math.Clamp(Volume, 0f, 1f) : 1f,
-        Modo = ModoVideo.PorNome(Modo).Nome,
+        Modo = string.IsNullOrWhiteSpace(Modo) ? ModoVideo.Hd60.Nome : Modo,
     };
 }
 

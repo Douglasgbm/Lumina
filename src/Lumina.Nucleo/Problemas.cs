@@ -1,6 +1,6 @@
 namespace Lumina.Nucleo;
 
-public enum ProblemaCaptura { Nenhum, PlacaAusente, PlacaOcupada, AcessoNegado, Outro }
+public enum ProblemaCaptura { Nenhum, PlacaAusente, PlacaOcupada, AcessoNegado, Outro, NenhumaPlacaEscolhida, PlacaEscolhidaAusente, SemModoUtil }
 
 /// <summary>O que mostrar no lugar da imagem: uma frase que diga o que houve, em vez de tela branca muda.</summary>
 public static class Problemas
@@ -13,7 +13,14 @@ public static class Problemas
         _ => ProblemaCaptura.Outro,
     };
 
-    public static string Mensagem(ProblemaCaptura p) => p switch
+    public static ProblemaCaptura De(MotivoSemPlaca motivo) => motivo switch
+    {
+        MotivoSemPlaca.NenhumaEscolhida => ProblemaCaptura.NenhumaPlacaEscolhida,
+        _ => ProblemaCaptura.PlacaEscolhidaAusente,
+    };
+
+    /// <param name="nomePlaca">Nome da placa escolhida, para dizer qual está faltando.</param>
+    public static string Mensagem(ProblemaCaptura p, string? nomePlaca = null) => p switch
     {
         // Medido em 03/10/2026: o Auto-Sandbox do Norton 360 isola cada versão nova na 1ª abertura.
         ProblemaCaptura.AcessoNegado =>
@@ -22,6 +29,12 @@ public static class Problemas
             "A placa está em uso por outro programa (OBS, Discord...).\nFeche o outro programa: a imagem volta sozinha.",
         ProblemaCaptura.PlacaAusente =>
             "Placa de captura não encontrada.\nConfira o cabo USB: a imagem volta sozinha.",
+        ProblemaCaptura.NenhumaPlacaEscolhida =>
+            "Escolha a placa de captura no menu.\nClique com o botão direito → Placa.",
+        ProblemaCaptura.PlacaEscolhidaAusente =>
+            $"A placa \"{nomePlaca ?? "escolhida"}\" não está conectada.\nConecte de novo, ou escolha outra no menu (botão direito → Placa).",
+        ProblemaCaptura.SemModoUtil =>
+            "Esta câmera não tem nenhum modo 16:9 de 720p ou mais.\nEscolha outra placa no menu (botão direito → Placa).",
         _ => "sem sinal",
     };
 }
