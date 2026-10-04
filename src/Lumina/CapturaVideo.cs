@@ -57,6 +57,10 @@ sealed class CapturaVideo : IDisposable
     public void Iniciar(DispositivoVideo placa, string? modoDesejado)
     {
         Interlocked.Exchange(ref _ultimoQuadro, 0);
+        // Até a placa nova abrir, menu e título não mostram os modos da anterior (achado do Douglas, 04/10/2026:
+        // escolheu 720p30 no menu velho durante a troca e a preferência da MS2109 virou 720p30).
+        _modos = [];
+        _modoAtual = null;
         _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez));
     }
 
@@ -82,7 +86,10 @@ sealed class CapturaVideo : IDisposable
             IMFSourceReader? leitor = null;
             try
             {
+                var relogio = System.Diagnostics.Stopwatch.StartNew();
+                Registro.Log($"captura: abrindo {placa.Nome}");
                 leitor = Abrir(placa, modoDesejado, vez, out fonte);
+                Registro.Log($"captura: abriu em {relogio.ElapsedMilliseconds} ms");
                 while (!vez.Parar && LerUm(leitor)) { }
             }
             catch (Exception e) when (!vez.Parar)
