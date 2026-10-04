@@ -6,21 +6,35 @@ public sealed record DispositivoAudio(string Id, string Nome, string Hardware);
 
 public sealed record FormatoNativo(int Indice, string Subtipo, int Largura, int Altura, int FpsNumerador, int FpsDenominador);
 
-/// <summary>Como reconhecer a placa de captura entre os dispositivos do Windows.</summary>
+public enum MotivoSemPlaca { NenhumaEscolhida, EscolhidaAusente }
+
+public sealed record ResultadoPlaca(DispositivoVideo? Placa, MotivoSemPlaca? Motivo);
+
+/// <summary>Qual câmera do Windows é a placa de captura.</summary>
 public static class Placa
 {
-    /// <summary>MacroSilicon MS2109 (medido em 03/10/2026). Vídeo e áudio carregam o mesmo ID.</summary>
-    public const string IdHardware = "VID_534D&PID_2109";
+    /// <summary>MacroSilicon MS2109, a placa do Douglas (medido em 03/10/2026).</summary>
+    public const string IdMs2109 = "VID_534D&PID_2109";
 
-    public static DispositivoVideo? EscolherVideo(IEnumerable<DispositivoVideo> lista) =>
-        lista.FirstOrDefault(d => d.Link.Contains(IdHardware, StringComparison.OrdinalIgnoreCase));
+    public static bool EhMs2109(string linkOuHardware) =>
+        linkOuHardware.Contains(IdMs2109, StringComparison.OrdinalIgnoreCase);
 
-    public static DispositivoAudio? EscolherAudio(IEnumerable<DispositivoAudio> lista) =>
-        lista.FirstOrDefault(d => d.Hardware.Contains(IdHardware, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>Índice do formato nativo MJPG com tamanho e fps exatos do modo; null se a placa não oferece.</summary>
-    public static int? EscolherFormatoNativo(IEnumerable<FormatoNativo> formatos, ModoVideo modo) =>
-        formatos.FirstOrDefault(f => f.Subtipo == "MJPG"
-            && f.Largura == modo.Largura && f.Altura == modo.Altura
-            && f.FpsDenominador > 0 && f.FpsNumerador == modo.Fps * f.FpsDenominador)?.Indice;
+    /// <summary>
+    /// 1º a escolha salva pelo link; 2º a mesma placa em outra porta USB (mesmo nome e modelo);
+    /// nada salvo → a MS2109 se estiver conectada. Nunca troca a escolhida por outra câmera.
+    /// </summary>
+    public static ResultadoPlaca Resolver(IReadOnlyList<DispositivoVideo> lista, string? linkSalvo, string? nomeSalvo)
+    {
+        if (linkSalvo is not null)
+        {
+            var exata = lista.FirstOrDefault(d => string.Equals(d.Link, linkSalvo, StringComparison.OrdinalIgnoreCase));
+            if (exata is not null) return new(exata, null);
+            var idSalvo = IdUsb.De(linkSalvo);
+            var outraPorta = lista.FirstOrDefault(d => d.Nome == nomeSalvo
+                && idSalvo is { } s && IdUsb.De(d.Link) is { } i && i.MesmoModelo(s));
+            return outraPorta is not null ? new(outraPorta, null) : new(null, MotivoSemPlaca.EscolhidaAusente);
+        }
+        var ms2109 = lista.FirstOrDefault(d => EhMs2109(d.Link));
+        return ms2109 is not null ? new(ms2109, null) : new(null, MotivoSemPlaca.NenhumaEscolhida);
+    }
 }
