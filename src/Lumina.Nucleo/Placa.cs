@@ -30,9 +30,11 @@ public static class Placa
             var exata = lista.FirstOrDefault(d => string.Equals(d.Link, linkSalvo, StringComparison.OrdinalIgnoreCase));
             if (exata is not null) return new(exata, null);
             var idSalvo = IdUsb.De(linkSalvo);
-            var outraPorta = lista.FirstOrDefault(d => d.Nome == nomeSalvo
-                && idSalvo is { } s && IdUsb.De(d.Link) is { } i && i.MesmoModelo(s));
-            return outraPorta is not null ? new(outraPorta, null) : new(null, MotivoSemPlaca.EscolhidaAusente);
+            var candidatas = lista.Where(d => d.Nome == nomeSalvo
+                && idSalvo is { } s && IdUsb.De(d.Link) is { } i && i.MesmoModelo(s)).ToList();
+            // Só é "a mesma em outra porta" se for a única do modelo: com duas iguais (dois consoles),
+            // pegar uma seria trocar a escolhida pela outra em silêncio (revisão final, 05/10/2026).
+            return candidatas.Count == 1 ? new(candidatas[0], null) : new(null, MotivoSemPlaca.EscolhidaAusente);
         }
         var ms2109 = lista.FirstOrDefault(d => EhMs2109(d.Link));
         return ms2109 is not null ? new(ms2109, null) : new(null, MotivoSemPlaca.NenhumaEscolhida);

@@ -65,4 +65,13 @@ public class ProblemasTestes
     {
         Assert.Contains("720p", Problemas.Mensagem(ProblemaCaptura.SemModoUtil));
     }
+
+    [Fact]
+    public void So_camera_sem_modo_util_e_problema_permanente()
+    {
+        // Revisão final (05/10/2026): tentar de novo a cada 2 s não resolve; só uma nova escolha no menu.
+        Assert.True(Problemas.Permanente(ProblemaCaptura.SemModoUtil));
+        foreach (var p in new[] { ProblemaCaptura.PlacaAusente, ProblemaCaptura.PlacaOcupada, ProblemaCaptura.AcessoNegado, ProblemaCaptura.Outro })
+            Assert.False(Problemas.Permanente(p));
+    }
 }

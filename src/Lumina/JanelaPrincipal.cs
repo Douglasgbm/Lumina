@@ -334,6 +334,15 @@ sealed class JanelaPrincipal : Form
             if (semSinal) _semSinal.BringToFront();
         }
 
+        // A mesma placa voltou em outra porta USB: o som é do aparelho novo (antes ficava mudo até reabrir).
+        if (_placa is not null && _captura?.PlacaAberta is { } aberta
+            && !string.Equals(aberta.Link, _placa.Link, StringComparison.OrdinalIgnoreCase))
+        {
+            Registro.Log($"placa em outra porta USB: {aberta.Nome}");
+            _placa = aberta;
+            ReiniciarAudio();
+        }
+
         if (_audio is not null && _placa is not null && !_audio.Ativo && _config.EntradaSom != EntradaSom.Nenhuma && ++_tiquesSemAudio >= 4)
         {
             _tiquesSemAudio = 0;

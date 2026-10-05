@@ -13,6 +13,12 @@ public static class Problemas
         _ => ProblemaCaptura.Outro,
     };
 
+    /// <summary>
+    /// Não melhora tentando de novo: só uma nova escolha no menu resolve. A captura para de reabrir
+    /// (antes reabria a câmera a cada 2 s para sempre — revisão final, 05/10/2026).
+    /// </summary>
+    public static bool Permanente(ProblemaCaptura p) => p == ProblemaCaptura.SemModoUtil;
+
     public static ProblemaCaptura De(MotivoSemPlaca motivo) => motivo switch
     {
         MotivoSemPlaca.NenhumaEscolhida => ProblemaCaptura.NenhumaPlacaEscolhida,

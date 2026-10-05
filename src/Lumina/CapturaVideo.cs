@@ -19,6 +19,13 @@ sealed class CapturaVideo : IDisposable
     volatile ProblemaCaptura _problema;
     volatile IReadOnlyList<ModoVideo> _modos = [];
     volatile ModoVideo? _modoAtual;
+    volatile DispositivoVideo? _placaAberta;
+
+    /// <summary>
+    /// A placa que esta captura de fato abriu. Pode ter link diferente do pedido: a mesma placa em outra porta USB.
+    /// A janela compara para reiniciar o som com o aparelho novo (revisão final, 05/10/2026).
+    /// </summary>
+    public DispositivoVideo? PlacaAberta => _placaAberta;
 
     sealed class PlacaNaoConectada() : Exception("placa não conectada");
     sealed class SemModoUtil() : Exception("a câmera não tem modo 16:9 de 720p ou mais");
@@ -61,6 +68,7 @@ sealed class CapturaVideo : IDisposable
         // escolheu 720p30 no menu velho durante a troca e a preferência da MS2109 virou 720p30).
         _modos = [];
         _modoAtual = null;
+        _placaAberta = null;
         _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez));
     }
 
@@ -116,6 +124,13 @@ sealed class CapturaVideo : IDisposable
                     fonte.Dispose();
                 }
             }
+            if (Problemas.Permanente(_problema))
+            {
+                // Tentar de novo não resolve (ex.: câmera sem modo útil): espera uma nova escolha no menu,
+                // sem reabrir a câmera a cada 2 s nem encher o log.
+                while (!vez.Parar) Thread.Sleep(100);
+                break;
+            }
             for (int i = 0; i < 20 && !vez.Parar; i++) Thread.Sleep(100);
         }
     }
@@ -124,7 +139,8 @@ sealed class CapturaVideo : IDisposable
     {
         fonte = null;
         // Acha a placa de novo a cada abertura: pode ter mudado de porta USB (link novo, mesmo nome e modelo).
-        var link = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome).Placa?.Link ?? throw new PlacaNaoConectada();
+        var achada = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome).Placa ?? throw new PlacaNaoConectada();
+        var link = achada.Link;
         using var fa = MediaFactory.MFCreateAttributes(2);
         fa.Set(CaptureDeviceAttributeKeys.SourceType, CaptureDeviceAttributeKeys.SourceTypeVidcap);
         fa.Set(CaptureDeviceAttributeKeys.SourceTypeVidcapSymbolicLink, link);
@@ -177,6 +193,7 @@ sealed class CapturaVideo : IDisposable
             throw;
         }
         _modoAtual = modo;
+        _placaAberta = achada;
         Registro.Log($"captura aberta: {placa.Nome} {modo.Nome}");
         return leitor;
     }

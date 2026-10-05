@@ -73,4 +73,14 @@ public class PlacaTestes
         Assert.False(Placa.EhMs2109(outra.Link));
         Assert.Equal(MotivoSemPlaca.NenhumaEscolhida, Placa.Resolver([outra], null, null).Motivo);
     }
+
+    [Fact]
+    public void Duas_placas_do_mesmo_modelo_e_a_escolhida_sumiu_nao_pega_a_outra()
+    {
+        // Revisão final (05/10/2026): duas "USB Video" MS2109; a escolhida (A) desconecta e a outra (B) fica.
+        var b = Ms2109 with { Link = @"\\?\usb#vid_534d&pid_2109&mi_00#7&99aa11bb&0&0000#{e5323777-f976-4f5b-9b55-b94699c46e44}\global" };
+        var c = Ms2109 with { Link = @"\\?\usb#vid_534d&pid_2109&mi_00#7&22222222&0&0000#{e5323777-f976-4f5b-9b55-b94699c46e44}\global" };
+        // Com duas candidatas em "outra porta", não dá para saber qual é a escolhida: pede no menu.
+        Assert.Equal(new ResultadoPlaca(null, MotivoSemPlaca.EscolhidaAusente), Placa.Resolver([C270, b, c], Ms2109.Link, Ms2109.Nome));
+    }
 }
