@@ -6,8 +6,10 @@ para jogar o console pelo PC. Abre só a placa: a webcam continua livre para out
 ## Antes de usar
 
 - **Windows 10/11** e o [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64).
-- **Placa suportada hoje: MacroSilicon MS2109** (as placas USB genéricas "USB Video" com `VID_534D&PID_2109`).
-  Outras placas ainda não são reconhecidas — escolher a placa num menu é a próxima etapa.
+- **Placa:** qualquer câmera que o Windows mostre (clique direito → **Placa**). A MS2109 (as "USB Video" genéricas
+  com `VID_534D&PID_2109`) é escolhida sozinha na 1ª vez; outras placas, escolha no menu. O som vem sozinho do mesmo
+  aparelho USB; se não vier, escolha em **Entrada de som**. Os modos do menu são os que a placa oferece (16:9, 720p+, 30/60).
+  Abrir uma placa leva alguns segundos (medido: 4 s a MS2109, 8 s uma webcam C270).
 - **Antivírus:** alguns (ex.: Norton 360) isolam um programa novo na primeira vez que ele abre, e isolado ele
   não acessa a câmera. Se aparecer "Acesso à câmera negado", feche e abra de novo.
 - A placa aceita **um programa por vez**: com o OBS (ou outro) usando a placa, o Lumina espera e volta sozinho.

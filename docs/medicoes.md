@@ -93,3 +93,14 @@ O OBS do Douglas pede 1080p60 (MJPEG, Buffering "Detecção automática" = sem f
 
 No "60" chegam 600 pacotes: 299 bons e 300 vazios/quebrados (o menor com 4 bytes; o decodificador
 diz "No JPEG data found in image"). Mesmo ritmo e mesma qualidade do 1080p30 → continua escondido no menu.
+
+## Escolher a placa — provas (04–05/10/2026)
+
+| Prova | Resultado |
+|---|---|
+| Andar 2: MS2109 sem placa salva | abre sozinha; menu "Placa" com a USB Video marcada; modos 720p30/720p60/1080p30; som 96k→48k |
+| Andar 3: C270 pelo menu | imagem dela em 720p30, microfone dela achado sozinho (48 kHz estéreo, sem correção); volta para a USB Video sem fechar |
+| Tempo de abertura | C270 **7,7 s** (começa no clique); MS2109 3,7–4,3 s; MS2109 após reconectar o USB 8,9 s |
+| USB da escolhida tirado e recolocado | aviso, tentativas a cada ~2 s, volta sozinha (áudio e vídeo) |
+| Entrada de som "Nenhuma" | sem som; "áudio: sem som (escolhido no menu)" registrado uma vez só |
+| Escolhida desconectada ao abrir | **pendente** (cabo da C270 de difícil acesso); coberto pelo teste `A_escolhida_desconectada_nao_troca_por_outra_nem_pela_MS2109` |
