@@ -78,3 +78,18 @@ Medida a chegada contra os 3 carimbos de cada quadro (MF, `DeviceTimestamp` e `{
 
 Atraso real não subiu. Em 1080p30 o modo suave fica ~62–69 ms depois do início do quadro na placa
 (o quadro de 1080p leva ~33 ms para chegar pelo USB). Melhoria possível, não feita: agendar pelo carimbo da placa.
+
+## O "1080p60" da MS2109 são 30 quadros bons + 30 vazios (05/10/2026, Rise em movimento)
+
+O OBS do Douglas pede 1080p60 (MJPEG, Buffering "Detecção automática" = sem fila). Medido com ffmpeg
+(`-use_wallclock_as_timestamps`, 10 s em cada modo, Lumina fechado):
+
+| Quadros bons (> 20 KB) | 1080p "60" | 1080p30 |
+|---|---|---|
+| por segundo | 30,0 | 30,1 |
+| tamanho mediano | ~170 KB | ~162 KB |
+| desvio do intervalo | 7,3 ms | 6,6 ms |
+| no ritmo (33 ± 8 ms) | 85% | 86% |
+
+No "60" chegam 600 pacotes: 299 bons e 300 vazios/quebrados (o menor com 4 bytes; o decodificador
+diz "No JPEG data found in image"). Mesmo ritmo e mesma qualidade do 1080p30 → continua escondido no menu.
