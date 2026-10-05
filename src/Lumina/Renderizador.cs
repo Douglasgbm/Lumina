@@ -201,7 +201,12 @@ sealed class Renderizador : IDisposable
                 CriarCadeia(d.Width, d.Height, d.Format);
             using var fundo = _cadeia!.GetBuffer<ID3D11Texture2D>(0);
             _ctx.CopySubresourceRegion(fundo, 0, 0, 0, 0, textura, subrecurso);
-            if (_cadeia.Present(0, PresentFlags.None).Failure) VerificarPerda();
+            var r = _cadeia.Present(0, PresentFlags.None);
+            if (r.Failure && !VerificarPerda() && !_presentFalhouRegistrado)
+            {
+                _presentFalhouRegistrado = true; // uma vez: sem isso, tela preta sem nenhuma linha no log
+                Registro.Log($"tela: Present falhou ({r})");
+            }
         }
         catch (SharpGen.Runtime.SharpGenException)
         {
@@ -209,8 +214,15 @@ sealed class Renderizador : IDisposable
         }
     }
 
-    bool VerificarPerda()
+    bool _presentFalhouRegistrado;
+
+    /// <summary>
+    /// Confere se a GPU foi removida. Público: no modo "menor atraso" quem falha primeiro é o leitor da placa
+    /// (que decodifica na mesma GPU), e o Present nunca é chamado — o vigia pergunta a cada tique.
+    /// </summary>
+    public bool VerificarPerda()
     {
+        if (_perdido) return true;
         var motivo = Dispositivo.DeviceRemovedReason;
         if (motivo.Success) return false;
         _perdido = true;

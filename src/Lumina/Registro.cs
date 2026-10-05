@@ -17,8 +17,12 @@ static class Registro
                 Directory.CreateDirectory(Pasta);
                 var caminho = Path.Combine(Pasta, arquivo);
                 // Passou de 5 MB: guarda o anterior como .1 e começa outro (sem limite, o log crescia para sempre).
-                if (File.Exists(caminho) && new FileInfo(caminho).Length > 5 * 1024 * 1024)
-                    File.Move(caminho, caminho + ".1", overwrite: true);
+                try
+                {
+                    if (File.Exists(caminho) && new FileInfo(caminho).Length > 5 * 1024 * 1024)
+                        File.Move(caminho, caminho + ".1", overwrite: true);
+                }
+                catch (Exception) { } // arquivo preso por outro programa: segue gravando no mesmo
                 File.AppendAllText(caminho, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {linha}{Environment.NewLine}");
             }
             catch (Exception)

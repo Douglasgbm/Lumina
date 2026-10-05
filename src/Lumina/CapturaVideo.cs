@@ -69,11 +69,12 @@ sealed class CapturaVideo : IDisposable
         Interlocked.Exchange(ref _ultimoQuadro, 0);
         lock (_travaEstado)
         {
-            _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez)); // avisa a anterior
             // Até a placa nova abrir, menu e título não mostram os modos da anterior (achado do Douglas, 04/10/2026:
             // escolheu 720p30 no menu velho durante a troca e a preferência da MS2109 virou 720p30).
+            // Zera ANTES de iniciar: uma falha rápida da thread nova não é apagada pelo "Abrindo".
             LimparEstado();
             _problema = ProblemaCaptura.Abrindo;
+            _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez)); // avisa a anterior, sob a trava
         }
     }
 
@@ -89,17 +90,20 @@ sealed class CapturaVideo : IDisposable
     /// Desligar a fonte daqui travava o ReadSample até o limite de 3 s (medido 3 de 3 vezes).
     /// Falso: a thread ainda está presa abrindo a placa — quem chama não deve desmontar a tela.
     /// </summary>
-    public bool Parar()
+    public bool Parar() => Parar(TimeSpan.FromSeconds(3));
+
+    /// <param name="limite">Quanto esperar a thread; quem tenta de novo depois pode passar pouco.</param>
+    public bool Parar(TimeSpan limite)
     {
         // A espera fica FORA da trava: a thread precisa dela no fim da abertura, e esperar segurando-a
         // travaria as duas até o limite. O aviso vem antes; a limpeza, sob a trava, depois.
-        bool terminou = _revezamento.Parar(TimeSpan.FromSeconds(3));
+        bool terminou = _revezamento.Parar(limite);
         lock (_travaEstado)
         {
             LimparEstado(); // o menu não fica com os modos de uma placa que não está mais aberta
             _problema = ProblemaCaptura.Nenhum;
         }
-        if (!terminou) Registro.Log("captura: a thread não terminou em 3 s");
+        if (!terminou) Registro.Log($"captura: a thread não terminou em {limite.TotalSeconds:0.##} s");
         return terminou;
     }
 
@@ -123,7 +127,7 @@ sealed class CapturaVideo : IDisposable
                 leitor = Abrir(placa, modoDesejado, vez, out fonte);
                 Registro.Log($"captura: abriu em {relogio.ElapsedMilliseconds} ms");
                 jaRegistrado = null;
-                while (!vez.Parar && LerUm(leitor)) { }
+                while (!vez.Parar && LerUm(leitor, vez)) { }
             }
             catch (Exception e) when (!vez.Parar)
             {
@@ -234,7 +238,7 @@ sealed class CapturaVideo : IDisposable
         return leitor;
     }
 
-    bool LerUm(IMFSourceReader leitor)
+    bool LerUm(IMFSourceReader leitor, Revezamento.Vez vez)
     {
         using var amostra = leitor.ReadSample(SourceReaderIndex.FirstVideoStream, SourceReaderControlFlag.None,
             out _, out SourceReaderFlag flags, out long tempoAmostra);
@@ -259,8 +263,12 @@ sealed class CapturaVideo : IDisposable
             _tela.Apresentar(textura, dxgi.SubresourceIndex);
             _aoQuadro?.Invoke((Relogio.Agora100ns() - tempoAmostra) / 10_000.0);
         }
-        Interlocked.Exchange(ref _ultimoQuadro, Environment.TickCount64);
-        _problema = ProblemaCaptura.Nenhum;
+        // A thread antiga, avisada no meio de um ReadSample, não apaga o "Abrindo X…" da troca.
+        if (!vez.Parar)
+        {
+            Interlocked.Exchange(ref _ultimoQuadro, Environment.TickCount64);
+            _problema = ProblemaCaptura.Nenhum;
+        }
         return true;
     }
 

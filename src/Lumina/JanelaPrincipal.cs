@@ -41,6 +41,8 @@ sealed class JanelaPrincipal : Form
     bool _maximizadaAntesDaTelaCheia;
     bool _telaCheia;
     FormWindowState _ultimoEstadoVisivel = FormWindowState.Normal;
+    bool _recriarTela;
+    int _tiquesRecriando;
     int _tiquesSemAudio;
 
     // Diagnóstico
@@ -81,7 +83,13 @@ sealed class JanelaPrincipal : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        if (_tela is not null) return; // handle recriado: não montar uma segunda captura segurando a placa
+        if (_tela is not null)
+        {
+            // Handle recriado: o painel ganhou HWND novo e a cadeia antiga aponta para o destruído.
+            // Não monta uma segunda captura; o vigia recria tela e captura no HWND novo.
+            _recriarTela = true;
+            return;
+        }
         _tela = new Renderizador(_painel.Handle);
         if (_diagnostico) _tela.AoExibir = AoQuadro;
         if (_config.ModoSuave) _tela.IniciarSuave();
@@ -205,7 +213,13 @@ sealed class JanelaPrincipal : Form
         if (_captura is null || _audio is null) return;
         if (_placa is not null && string.Equals(placa.Link, _placa.Link, StringComparison.OrdinalIgnoreCase)
             && _captura.ModoAtual is not null && _captura.Problema == ProblemaCaptura.Nenhum)
-            return; // já é a placa aberta e funcionando: reiniciar só derrubaria imagem e som por segundos
+        {
+            // Já é a placa aberta e funcionando: reiniciar só derrubaria imagem e som por segundos.
+            // Mas fixa a escolha (ela pode ter vindo de outra porta USB, com link novo).
+            _config = _config with { PlacaLink = placa.Link, PlacaNome = placa.Nome };
+            SalvarConfiguracao();
+            return;
+        }
         _config = _config with { PlacaLink = placa.Link, PlacaNome = placa.Nome };
         var r = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome);
         _semPlaca = r.Motivo;
@@ -231,11 +245,25 @@ sealed class JanelaPrincipal : Form
     void RecriarTela()
     {
         if (_tela is null || _captura is null) return;
-        if (!_captura.Parar()) return;
-        Registro.Log("tela: recriando a GPU");
+        if (++_tiquesRecriando % 4 != 1) return; // tenta a cada ~2 s, não a cada 0,5 s
+        // Espera curta: a captura pode estar presa abrindo a placa; tenta de novo no próximo ciclo sem congelar a janela.
+        if (!_captura.Parar(TimeSpan.FromMilliseconds(50))) return;
+        Renderizador nova;
+        try
+        {
+            nova = new Renderizador(_painel.Handle); // antes de descartar a antiga: se falhar, nada fica pela metade
+        }
+        catch (Exception ex)
+        {
+            Registro.Erro("tela.recriar", ex); // driver ainda voltando: tenta de novo em ~2 s
+            return;
+        }
+        Registro.Log("tela: recriada");
         bool suave = _tela.Suave;
         _tela.Dispose();
-        _tela = new Renderizador(_painel.Handle);
+        _tela = nova;
+        _recriarTela = false;
+        _tiquesRecriando = 0;
         if (_diagnostico) _tela.AoExibir = AoQuadro;
         if (suave) _tela.IniciarSuave();
         _captura = new CapturaVideo(_tela, _diagnostico ? AoQuadro : null);
@@ -252,6 +280,7 @@ sealed class JanelaPrincipal : Form
     void ReiniciarAudio()
     {
         if (_audio is null) return;
+        _audio.Placa = _placa;
         if (_placa is null)
         {
             _audio.Parar(); // sem placa, sem som: um microfone escolhido à mão tocaria nas caixas
@@ -355,7 +384,7 @@ sealed class JanelaPrincipal : Form
 
     void Vigiar()
     {
-        if (_tela?.Perdido == true) RecriarTela();
+        if (_recriarTela || _tela?.VerificarPerda() == true) RecriarTela();
         if (_placa is null && ++_tiquesSemPlaca >= 4)
         {
             _tiquesSemPlaca = 0;

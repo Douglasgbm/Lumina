@@ -226,7 +226,7 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
         _ui.Post(_ =>
         {
             if (deviceId == _saidaFixaId && Ativo) ReiniciarSaida();
-            else if (deviceId == EntradaEscolhida)
+            else if (deviceId == EntradaEscolhida && Placa is not null) // sem placa, sem som
             {
                 try { Iniciar(); }
                 catch (Exception e) { Registro.Erro("áudio.entrada", e); }
