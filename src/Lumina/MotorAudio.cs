@@ -219,7 +219,20 @@ sealed class MotorAudio : IMMNotificationClient, IDisposable
             _ui.Post(_ => { if (Ativo && _saidaFixaId is null) ReiniciarSaida(); }, null);
     }
 
-    public void OnDeviceStateChanged(string deviceId, DeviceState newState) { }
+    /// <summary>Headset fixado (saída) ou entrada escolhida religados: volta a usar eles sozinho.</summary>
+    public void OnDeviceStateChanged(string deviceId, DeviceState newState)
+    {
+        if (newState != DeviceState.Active) return;
+        _ui.Post(_ =>
+        {
+            if (deviceId == _saidaFixaId && Ativo) ReiniciarSaida();
+            else if (deviceId == EntradaEscolhida)
+            {
+                try { Iniciar(); }
+                catch (Exception e) { Registro.Erro("áudio.entrada", e); }
+            }
+        }, null);
+    }
     public void OnDeviceAdded(string pwstrDeviceId) { }
     public void OnDeviceRemoved(string deviceId) { }
     public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }

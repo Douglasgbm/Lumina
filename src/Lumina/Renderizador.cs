@@ -46,6 +46,11 @@ sealed class Renderizador : IDisposable
 
     public bool Suave => _relogio is not null;
 
+    volatile bool _perdido;
+
+    /// <summary>A GPU foi removida (driver reiniciado/atualizado): a janela precisa recriar tudo.</summary>
+    public bool Perdido => _perdido;
+
     /// <summary>Atraso da fila do modo suave; a captura ajusta pelo que mede de chegada.</summary>
     public double AtrasoMs
     {
@@ -188,12 +193,29 @@ sealed class Renderizador : IDisposable
     /// <summary>Chamar com a trava.</summary>
     void MostrarJa(ID3D11Texture2D textura, uint subrecurso)
     {
-        var d = textura.Description;
-        if (_cadeia is null || d.Width != _largura || d.Height != _altura || d.Format != _formato)
-            CriarCadeia(d.Width, d.Height, d.Format);
-        using var fundo = _cadeia!.GetBuffer<ID3D11Texture2D>(0);
-        _ctx.CopySubresourceRegion(fundo, 0, 0, 0, 0, textura, subrecurso);
-        _cadeia.Present(0, PresentFlags.None);
+        if (_perdido) return;
+        try
+        {
+            var d = textura.Description;
+            if (_cadeia is null || d.Width != _largura || d.Height != _altura || d.Format != _formato)
+                CriarCadeia(d.Width, d.Height, d.Format);
+            using var fundo = _cadeia!.GetBuffer<ID3D11Texture2D>(0);
+            _ctx.CopySubresourceRegion(fundo, 0, 0, 0, 0, textura, subrecurso);
+            if (_cadeia.Present(0, PresentFlags.None).Failure) VerificarPerda();
+        }
+        catch (SharpGen.Runtime.SharpGenException)
+        {
+            if (!VerificarPerda()) throw;
+        }
+    }
+
+    bool VerificarPerda()
+    {
+        var motivo = Dispositivo.DeviceRemovedReason;
+        if (motivo.Success) return false;
+        _perdido = true;
+        Registro.Log($"tela: GPU perdida ({motivo})");
+        return true;
     }
 
     void CriarCadeia(uint largura, uint altura, Format formato)

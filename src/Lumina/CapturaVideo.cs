@@ -20,6 +20,9 @@ sealed class CapturaVideo : IDisposable
     volatile IReadOnlyList<ModoVideo> _modos = [];
     volatile ModoVideo? _modoAtual;
     volatile DispositivoVideo? _placaAberta;
+    // Publicar e zerar o estado (modos, modo, placa aberta) sob a mesma trava em que a thread antiga é avisada:
+    // assim uma thread que já ia publicar não sobrescreve o estado zerado da troca (revisão final, 05/10/2026).
+    readonly object _travaEstado = new();
 
     /// <summary>
     /// A placa que esta captura de fato abriu. Pode ter link diferente do pedido: a mesma placa em outra porta USB.
@@ -64,12 +67,21 @@ sealed class CapturaVideo : IDisposable
     public void Iniciar(DispositivoVideo placa, string? modoDesejado)
     {
         Interlocked.Exchange(ref _ultimoQuadro, 0);
-        // Até a placa nova abrir, menu e título não mostram os modos da anterior (achado do Douglas, 04/10/2026:
-        // escolheu 720p30 no menu velho durante a troca e a preferência da MS2109 virou 720p30).
+        lock (_travaEstado)
+        {
+            _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez)); // avisa a anterior
+            // Até a placa nova abrir, menu e título não mostram os modos da anterior (achado do Douglas, 04/10/2026:
+            // escolheu 720p30 no menu velho durante a troca e a preferência da MS2109 virou 720p30).
+            LimparEstado();
+            _problema = ProblemaCaptura.Abrindo;
+        }
+    }
+
+    void LimparEstado()
+    {
         _modos = [];
         _modoAtual = null;
         _placaAberta = null;
-        _revezamento.Iniciar(vez => Laco(placa, modoDesejado, vez));
     }
 
     /// <summary>
@@ -79,7 +91,14 @@ sealed class CapturaVideo : IDisposable
     /// </summary>
     public bool Parar()
     {
+        // A espera fica FORA da trava: a thread precisa dela no fim da abertura, e esperar segurando-a
+        // travaria as duas até o limite. O aviso vem antes; a limpeza, sob a trava, depois.
         bool terminou = _revezamento.Parar(TimeSpan.FromSeconds(3));
+        lock (_travaEstado)
+        {
+            LimparEstado(); // o menu não fica com os modos de uma placa que não está mais aberta
+            _problema = ProblemaCaptura.Nenhum;
+        }
         if (!terminou) Registro.Log("captura: a thread não terminou em 3 s");
         return terminou;
     }
@@ -88,6 +107,10 @@ sealed class CapturaVideo : IDisposable
 
     void Laco(DispositivoVideo placa, string? modoDesejado, Revezamento.Vez vez)
     {
+        // Placa fora do lugar: tenta de novo a cada 2 s. O log registra a 1ª tentativa e cada problema NOVO,
+        // não a mesma linha a cada 2 s (antes ~86 mil linhas por dia com a placa desplugada).
+        bool primeira = true;
+        ProblemaCaptura? jaRegistrado = null;
         while (!vez.Parar)
         {
             IMFMediaSource? fonte = null;
@@ -95,21 +118,25 @@ sealed class CapturaVideo : IDisposable
             try
             {
                 var relogio = System.Diagnostics.Stopwatch.StartNew();
-                Registro.Log($"captura: abrindo {placa.Nome}");
+                if (primeira) Registro.Log($"captura: abrindo {placa.Nome}");
+                primeira = false;
                 leitor = Abrir(placa, modoDesejado, vez, out fonte);
                 Registro.Log($"captura: abriu em {relogio.ElapsedMilliseconds} ms");
+                jaRegistrado = null;
                 while (!vez.Parar && LerUm(leitor)) { }
             }
             catch (Exception e) when (!vez.Parar)
             {
-                Registro.Erro("captura", e);
-                _problema = e switch
+                var problema = e switch
                 {
                     PlacaNaoConectada => ProblemaCaptura.PlacaAusente,
                     SemModoUtil => ProblemaCaptura.SemModoUtil,
                     SharpGen.Runtime.SharpGenException s => Problemas.DeHResult(s.HResult),
                     _ => ProblemaCaptura.Outro,
                 };
+                if (problema != jaRegistrado) Registro.Erro("captura", e);
+                jaRegistrado = problema;
+                _problema = problema;
             }
             catch (Exception)
             {
@@ -149,6 +176,7 @@ sealed class CapturaVideo : IDisposable
 
         // Fixa o formato nativo do modo, preferindo MJPG; sem isso o leitor pode escolher NV12 (decodificado na CPU).
         ModoVideo modo;
+        List<ModoVideo> modos;
         using (var pd = fonte.CreatePresentationDescriptor())
         {
             pd.GetStreamDescriptorByIndex(0, out _, out IMFStreamDescriptor sd);
@@ -161,8 +189,7 @@ sealed class CapturaVideo : IDisposable
                     using var t = mth.GetMediaTypeByIndex(i);
                     formatos.Add(Descrever(i, t));
                 }
-                var modos = Modos.Disponiveis(formatos, link);
-                _modos = modos;
+                modos = Modos.Disponiveis(formatos, link);
                 modo = Modos.Escolher(modos, modoDesejado) ?? throw new SemModoUtil();
                 int indice = Modos.FormatoPara(formatos, modo)!.Value;
                 using var escolhido = mth.GetMediaTypeByIndex(indice);
@@ -192,8 +219,17 @@ sealed class CapturaVideo : IDisposable
             leitor.Dispose();
             throw;
         }
-        _modoAtual = modo;
-        _placaAberta = achada;
+        lock (_travaEstado)
+        {
+            if (vez.Parar)
+            {
+                leitor.Dispose();
+                throw new OperationCanceledException();
+            }
+            _modos = modos;
+            _modoAtual = modo;
+            _placaAberta = achada;
+        }
         Registro.Log($"captura aberta: {placa.Nome} {modo.Nome}");
         return leitor;
     }

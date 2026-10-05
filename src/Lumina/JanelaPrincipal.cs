@@ -40,6 +40,7 @@ sealed class JanelaPrincipal : Form
     Rectangle _limitesNormais;
     bool _maximizadaAntesDaTelaCheia;
     bool _telaCheia;
+    FormWindowState _ultimoEstadoVisivel = FormWindowState.Normal;
     int _tiquesSemAudio;
 
     // Diagnóstico
@@ -80,6 +81,7 @@ sealed class JanelaPrincipal : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        if (_tela is not null) return; // handle recriado: não montar uma segunda captura segurando a placa
         _tela = new Renderizador(_painel.Handle);
         if (_diagnostico) _tela.AoExibir = AoQuadro;
         if (_config.ModoSuave) _tela.IniciarSuave();
@@ -105,6 +107,8 @@ sealed class JanelaPrincipal : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        // Fechar pela barra de tarefas com a janela minimizada não pode esquecer que ela estava maximizada.
+        if (WindowState != FormWindowState.Minimized) _ultimoEstadoVisivel = WindowState;
         var modo = _captura?.ModoAtual ?? ModoVideo.Hd60;
         var r = Enquadramento.Encaixar(ClientSize.Width, ClientSize.Height, modo.Largura, modo.Altura);
         _painel.Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura);
@@ -158,7 +162,9 @@ sealed class JanelaPrincipal : Form
         else
         {
             FormBorderStyle = FormBorderStyle.Sizable;
-            Bounds = _limitesNormais;
+            var telas = Screen.AllScreens.Select(t => Para(t.WorkingArea)).ToList();
+            var r = Enquadramento.GarantirVisivel(Para(_limitesNormais), telas, Para(Screen.PrimaryScreen!.WorkingArea));
+            Bounds = new Rectangle(r.X, r.Y, r.Largura, r.Altura); // o monitor de antes pode ter sido desligado
             if (_maximizadaAntesDaTelaCheia) WindowState = FormWindowState.Maximized;
             _telaCheia = false;
         }
@@ -197,6 +203,9 @@ sealed class JanelaPrincipal : Form
     void EscolherPlaca(DispositivoVideo placa)
     {
         if (_captura is null || _audio is null) return;
+        if (_placa is not null && string.Equals(placa.Link, _placa.Link, StringComparison.OrdinalIgnoreCase)
+            && _captura.ModoAtual is not null && _captura.Problema == ProblemaCaptura.Nenhum)
+            return; // já é a placa aberta e funcionando: reiniciar só derrubaria imagem e som por segundos
         _config = _config with { PlacaLink = placa.Link, PlacaNome = placa.Nome };
         var r = Placa.Resolver(Dispositivos.Video(), placa.Link, placa.Nome);
         _semPlaca = r.Motivo;
@@ -215,6 +224,24 @@ sealed class JanelaPrincipal : Form
         SalvarConfiguracao();
     }
 
+    /// <summary>
+    /// A GPU foi perdida (driver reiniciado/atualizado): sem isso ficava "sem sinal" até reabrir (revisão, 03/10/2026).
+    /// Se a captura ainda estiver abrindo a placa, tenta de novo no próximo tique do vigia.
+    /// </summary>
+    void RecriarTela()
+    {
+        if (_tela is null || _captura is null) return;
+        if (!_captura.Parar()) return;
+        Registro.Log("tela: recriando a GPU");
+        bool suave = _tela.Suave;
+        _tela.Dispose();
+        _tela = new Renderizador(_painel.Handle);
+        if (_diagnostico) _tela.AoExibir = AoQuadro;
+        if (suave) _tela.IniciarSuave();
+        _captura = new CapturaVideo(_tela, _diagnostico ? AoQuadro : null);
+        if (_placa is not null) _captura.Iniciar(_placa, _config.Modo);
+    }
+
     void EscolherEntrada(string? entrada)
     {
         _config = _config with { EntradaSom = entrada };
@@ -225,6 +252,11 @@ sealed class JanelaPrincipal : Form
     void ReiniciarAudio()
     {
         if (_audio is null) return;
+        if (_placa is null)
+        {
+            _audio.Parar(); // sem placa, sem som: um microfone escolhido à mão tocaria nas caixas
+            return;
+        }
         _audio.Placa = _placa;
         _audio.EntradaEscolhida = _config.EntradaSom;
         try { _audio.Iniciar(); }
@@ -253,10 +285,13 @@ sealed class JanelaPrincipal : Form
             menu.Items.Add(new ToolStripSeparator());
 
             var entrada = new ToolStripMenuItem("Entrada de som");
-            entrada.DropDownItems.Add(new ToolStripMenuItem("Automático (da placa)", null, (_, _) => EscolherEntrada(null))
-            { Checked = _config.EntradaSom is null });
+            var entradas = _audio?.Entradas() ?? [];
+            bool escolhidaSumiu = _config.EntradaSom is { } idEscolhida && idEscolhida != EntradaSom.Nenhuma && entradas.All(e => e.Id != idEscolhida);
+            entrada.DropDownItems.Add(new ToolStripMenuItem(
+                escolhidaSumiu ? "Automático (a escolhida não está conectada)" : "Automático (da placa)", null, (_, _) => EscolherEntrada(null))
+            { Checked = _config.EntradaSom is null || escolhidaSumiu });
             if (_audio is not null)
-                foreach (var e in _audio.Entradas())
+                foreach (var e in entradas)
                     entrada.DropDownItems.Add(new ToolStripMenuItem(e.Nome, null, (_, _) => EscolherEntrada(e.Id))
                     { Checked = _config.EntradaSom == e.Id });
             entrada.DropDownItems.Add(new ToolStripMenuItem("Nenhuma", null, (_, _) => EscolherEntrada(EntradaSom.Nenhuma))
@@ -267,9 +302,15 @@ sealed class JanelaPrincipal : Form
             saida.DropDownItems.Add(new ToolStripMenuItem("Padrão do Windows", null, (_, _) => FixarSaida(null))
             { Checked = _audio?.SaidaFixaId is null });
             if (_audio is not null)
-                foreach (var (id, nome) in _audio.Saidas())
+            {
+                var saidas = _audio.Saidas();
+                foreach (var (id, nome) in saidas)
                     saida.DropDownItems.Add(new ToolStripMenuItem(nome, null, (_, _) => FixarSaida(id))
                     { Checked = _audio.SaidaFixaId == id });
+                if (_audio.SaidaFixaId is { } fixa && saidas.All(x => x.Id != fixa))
+                    saida.DropDownItems.Add(new ToolStripMenuItem("(a fixada não está conectada — tocando na padrão)")
+                    { Checked = true, Enabled = false });
+            }
             menu.Items.Add(saida);
 
             var volume = new ToolStripMenuItem("Volume");
@@ -314,6 +355,7 @@ sealed class JanelaPrincipal : Form
 
     void Vigiar()
     {
+        if (_tela?.Perdido == true) RecriarTela();
         if (_placa is null && ++_tiquesSemPlaca >= 4)
         {
             _tiquesSemPlaca = 0;
@@ -324,8 +366,8 @@ sealed class JanelaPrincipal : Form
         if (Text != titulo) { Text = titulo; OnResize(EventArgs.Empty); }
 
         bool semSinal = _captura is null || _placa is null || _captura.MsDesdeUltimoQuadro > 1000;
-        var problema = _placa is null && _semPlaca is { } motivo ? Problemas.De(motivo) : _captura?.Problema ?? ProblemaCaptura.Nenhum;
-        var texto = Problemas.Mensagem(problema, _config.PlacaNome);
+        var problema = Problemas.NaTela(_captura?.Problema ?? ProblemaCaptura.Nenhum, _semPlaca, _placa is not null);
+        var texto = Problemas.Mensagem(problema, _placa?.Nome ?? _config.PlacaNome);
         if (_semSinal.Text != texto) _semSinal.Text = texto;
         if (_semSinal.Visible != semSinal)
         {
@@ -362,7 +404,8 @@ sealed class JanelaPrincipal : Form
             Y = normal.Y,
             Largura = normal.Width,
             Altura = normal.Height,
-            Maximizada = _telaCheia ? _maximizadaAntesDaTelaCheia : WindowState == FormWindowState.Maximized,
+            Maximizada = _telaCheia ? _maximizadaAntesDaTelaCheia
+                : (WindowState == FormWindowState.Minimized ? _ultimoEstadoVisivel : WindowState) == FormWindowState.Maximized,
             TelaCheia = _telaCheia,
             SaidaFixaId = _audio?.SaidaFixaId,
             Volume = _audio?.Volume ?? _config.Volume,

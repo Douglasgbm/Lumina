@@ -15,9 +15,16 @@ static class Registro
             try
             {
                 Directory.CreateDirectory(Pasta);
-                File.AppendAllText(Path.Combine(Pasta, arquivo), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {linha}{Environment.NewLine}");
+                var caminho = Path.Combine(Pasta, arquivo);
+                // Passou de 5 MB: guarda o anterior como .1 e começa outro (sem limite, o log crescia para sempre).
+                if (File.Exists(caminho) && new FileInfo(caminho).Length > 5 * 1024 * 1024)
+                    File.Move(caminho, caminho + ".1", overwrite: true);
+                File.AppendAllText(caminho, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {linha}{Environment.NewLine}");
             }
-            catch (IOException) { }
+            catch (Exception)
+            {
+                // Log é ajuda, não pode derrubar o app (antivírus/arquivo somente leitura lançavam UnauthorizedAccess).
+            }
         }
     }
 
