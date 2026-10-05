@@ -57,6 +57,22 @@ public class EnquadramentoTestes
     }
 
     [Fact]
+    public void Coordenada_gigante_do_config_nao_estoura_e_volta_ao_principal()
+    {
+        // Revisão (03/10/2026): X+Largura dava a volta no int e a janela "parecia" visível.
+        var j = new Retangulo(2147483000, 100, 1280, 720);
+        Assert.Equal(new Retangulo(320, 180, 1280, 720), Enquadramento.GarantirVisivel(j, [Principal], Principal));
+    }
+
+    [Fact]
+    public void Barra_de_titulo_fora_da_tela_conta_como_perdida()
+    {
+        // Só a parte de baixo aparece: não dá para arrastar a janela de volta.
+        var j = new Retangulo(100, -600, 1280, 720); // 120 px de baixo aparecem, a barra de título não
+        Assert.Equal(new Retangulo(320, 180, 1280, 720), Enquadramento.GarantirVisivel(j, [Principal], Principal));
+    }
+
+    [Fact]
     public void Janela_maior_que_o_monitor_principal_encolhe()
     {
         var j = new Retangulo(5000, 0, 3840, 2160);

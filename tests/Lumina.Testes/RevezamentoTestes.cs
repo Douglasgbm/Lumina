@@ -61,6 +61,27 @@ public class RevezamentoTestes
     }
 
     [Fact]
+    public void Parar_que_estourou_o_tempo_ainda_faz_o_proximo_esperar()
+    {
+        // Revisão final (05/10/2026): o Parar esquecia a thread presa e o Iniciar seguinte rodava junto com ela.
+        var r = new Revezamento("teste");
+        using var solta = new ManualResetEventSlim();
+        using var rodou = new ManualResetEventSlim();
+        int simultaneos = 0, maximo = 0;
+        void Conta() { int agora = Interlocked.Increment(ref simultaneos); lock (r) maximo = Math.Max(maximo, agora); }
+        r.Iniciar(_ => { Conta(); solta.Wait(TimeSpan.FromSeconds(5)); Interlocked.Decrement(ref simultaneos); });
+        Thread.Sleep(30);
+        Assert.False(r.Parar(TimeSpan.FromMilliseconds(100)));
+        r.Iniciar(vez => { Conta(); rodou.Set(); Interlocked.Decrement(ref simultaneos); });
+        Thread.Sleep(150);
+        Assert.False(rodou.IsSet); // ainda esperando a presa terminar
+        solta.Set();
+        Assert.True(rodou.Wait(TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, maximo);
+        Assert.True(r.Parar(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
     public void Parar_sem_nada_rodando_devolve_verdadeiro()
     {
         Assert.True(new Revezamento("teste").Parar(TimeSpan.FromMilliseconds(10)));

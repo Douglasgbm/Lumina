@@ -67,6 +67,28 @@ public class ProblemasTestes
     }
 
     [Fact]
+    public void Abrindo_diz_qual_placa()
+    {
+        Assert.Equal("Abrindo Logi C270 HD WebCam…", Problemas.Mensagem(ProblemaCaptura.Abrindo, "Logi C270 HD WebCam"));
+    }
+
+    [Fact]
+    public void Na_tela_sem_placa_vale_o_motivo_da_escolha()
+    {
+        Assert.Equal(ProblemaCaptura.NenhumaPlacaEscolhida, Problemas.NaTela(ProblemaCaptura.Nenhum, MotivoSemPlaca.NenhumaEscolhida, temPlaca: false));
+        Assert.Equal(ProblemaCaptura.PlacaEscolhidaAusente, Problemas.NaTela(ProblemaCaptura.Outro, MotivoSemPlaca.EscolhidaAusente, temPlaca: false));
+    }
+
+    [Fact]
+    public void Na_tela_placa_desplugada_durante_o_jogo_usa_a_mensagem_com_o_nome()
+    {
+        // Revisão final (05/10/2026): antes era a genérica "Placa de captura não encontrada".
+        Assert.Equal(ProblemaCaptura.PlacaEscolhidaAusente, Problemas.NaTela(ProblemaCaptura.PlacaAusente, null, temPlaca: true));
+        Assert.Equal(ProblemaCaptura.PlacaOcupada, Problemas.NaTela(ProblemaCaptura.PlacaOcupada, null, temPlaca: true));
+        Assert.Equal(ProblemaCaptura.Abrindo, Problemas.NaTela(ProblemaCaptura.Abrindo, null, temPlaca: true));
+    }
+
+    [Fact]
     public void So_camera_sem_modo_util_e_problema_permanente()
     {
         // Revisão final (05/10/2026): tentar de novo a cada 2 s não resolve; só uma nova escolha no menu.

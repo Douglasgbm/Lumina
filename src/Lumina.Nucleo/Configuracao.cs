@@ -30,6 +30,8 @@ public sealed record Configuracao
     /// </summary>
     public Configuracao Saneada() => this with
     {
+        X = Math.Clamp(X, -32000, 32000),
+        Y = Math.Clamp(Y, -32000, 32000),
         Largura = Math.Clamp(Largura, 320, 16384),
         Altura = Math.Clamp(Altura, 180, 16384),
         Volume = float.IsFinite(Volume) ? Math.Clamp(Volume, 0f, 1f) : 1f,

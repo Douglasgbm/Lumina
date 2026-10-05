@@ -80,6 +80,16 @@ public sealed class ConfiguracaoTestes : IDisposable
     }
 
     [Fact]
+    public void Posicao_absurda_e_limitada()
+    {
+        Directory.CreateDirectory(_pasta);
+        File.WriteAllText(Caminho, "{\"X\": 2147483000, \"Y\": -2147483000}");
+        var c = new ArmazemConfiguracao(Caminho).Ler();
+        Assert.Equal(32000, c.X);
+        Assert.Equal(-32000, c.Y);
+    }
+
+    [Fact]
     public void Campo_que_falta_fica_com_o_padrao()
     {
         Directory.CreateDirectory(_pasta);

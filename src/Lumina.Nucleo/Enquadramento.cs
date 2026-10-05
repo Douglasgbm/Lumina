@@ -19,16 +19,19 @@ public static class Enquadramento
     }
 
     /// <summary>
-    /// Mantém a janela onde estava se ainda aparece em algum monitor (pelo menos 100×50 visíveis);
-    /// senão a centraliza no monitor principal, encolhendo se for maior que ele.
+    /// Mantém a janela onde estava se a barra de título aparece em algum monitor (pelo menos 100 px de largura
+    /// e 20 de altura da faixa de cima — senão não dá para arrastar); senão a centraliza no monitor principal,
+    /// encolhendo se for maior que ele. Contas em long: X/Y gigantes do config davam a volta no int.
     /// </summary>
     public static Retangulo GarantirVisivel(Retangulo janela, IReadOnlyList<Retangulo> telas, Retangulo principal)
     {
+        const int BarraDeTitulo = 30;
+        long jx = janela.X, jy = janela.Y, barra = Math.Min(BarraDeTitulo, janela.Altura);
         foreach (var t in telas)
         {
-            int l = Math.Min(janela.X + janela.Largura, t.X + t.Largura) - Math.Max(janela.X, t.X);
-            int a = Math.Min(janela.Y + janela.Altura, t.Y + t.Altura) - Math.Max(janela.Y, t.Y);
-            if (l >= 100 && a >= 50) return janela;
+            long l = Math.Min(jx + janela.Largura, (long)t.X + t.Largura) - Math.Max(jx, t.X);
+            long a = Math.Min(jy + barra, (long)t.Y + t.Altura) - Math.Max(jy, t.Y);
+            if (l >= 100 && a >= Math.Min(20, barra)) return janela;
         }
         int largura = Math.Min(janela.Largura, principal.Largura);
         int altura = Math.Min(janela.Altura, principal.Altura);

@@ -34,13 +34,20 @@ public sealed class Revezamento(string nome)
         fio.Start();
     }
 
-    /// <summary>Avisa e espera até o limite. Falso: o trabalho ainda roda (e vai terminar sozinho depois).</summary>
+    /// <summary>
+    /// Avisa e espera até o limite. Falso: o trabalho ainda roda (vai terminar sozinho depois) e continua
+    /// guardado — o próximo Iniciar espera por ele (antes era esquecido e os dois rodavam juntos; revisão final, 05/10/2026).
+    /// </summary>
     public bool Parar(TimeSpan limite)
     {
         _vez?.Avisar();
-        var fio = _fio;
-        _fio = null;
         _vez = null;
-        return fio is null || fio.Join(limite);
+        var fio = _fio;
+        if (fio is null || fio.Join(limite))
+        {
+            _fio = null;
+            return true;
+        }
+        return false;
     }
 }

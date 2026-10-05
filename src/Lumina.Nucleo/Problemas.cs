@@ -1,6 +1,6 @@
 namespace Lumina.Nucleo;
 
-public enum ProblemaCaptura { Nenhum, PlacaAusente, PlacaOcupada, AcessoNegado, Outro, NenhumaPlacaEscolhida, PlacaEscolhidaAusente, SemModoUtil }
+public enum ProblemaCaptura { Nenhum, PlacaAusente, PlacaOcupada, AcessoNegado, Outro, NenhumaPlacaEscolhida, PlacaEscolhidaAusente, SemModoUtil, Abrindo }
 
 /// <summary>O que mostrar no lugar da imagem: uma frase que diga o que houve, em vez de tela branca muda.</summary>
 public static class Problemas
@@ -18,6 +18,16 @@ public static class Problemas
     /// (antes reabria a câmera a cada 2 s para sempre — revisão final, 05/10/2026).
     /// </summary>
     public static bool Permanente(ProblemaCaptura p) => p == ProblemaCaptura.SemModoUtil;
+
+    /// <summary>
+    /// O que a tela mostra, juntando o motivo de não haver placa (janela) e o problema da captura.
+    /// Placa desplugada durante o jogo usa a mensagem com o nome dela (revisão final, 05/10/2026).
+    /// </summary>
+    public static ProblemaCaptura NaTela(ProblemaCaptura daCaptura, MotivoSemPlaca? semPlaca, bool temPlaca)
+    {
+        if (!temPlaca && semPlaca is { } motivo) return De(motivo);
+        return temPlaca && daCaptura == ProblemaCaptura.PlacaAusente ? ProblemaCaptura.PlacaEscolhidaAusente : daCaptura;
+    }
 
     public static ProblemaCaptura De(MotivoSemPlaca motivo) => motivo switch
     {
@@ -41,6 +51,7 @@ public static class Problemas
             $"A placa \"{nomePlaca ?? "escolhida"}\" não está conectada.\nConecte de novo, ou escolha outra no menu (botão direito → Placa).",
         ProblemaCaptura.SemModoUtil =>
             "Esta câmera não tem nenhum modo 16:9 de 720p ou mais.\nEscolha outra placa no menu (botão direito → Placa).",
+        ProblemaCaptura.Abrindo => $"Abrindo {nomePlaca ?? "a placa"}…",
         _ => "sem sinal",
     };
 }
