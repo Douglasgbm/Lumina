@@ -1,0 +1,22 @@
+# Roda os testes do núcleo e compila o app a cada envio, numa máquina Windows do GitHub.
+name: Testes
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Testes do núcleo
+        run: dotnet test tests/Lumina.Testes --configuration Release
+
+      - name: Compila o app (sem avisos)
+        run: dotnet build src/Lumina --configuration Release -warnaserror
