@@ -104,3 +104,9 @@ diz "No JPEG data found in image"). Mesmo ritmo e mesma qualidade do 1080p30 →
 | USB da escolhida tirado e recolocado | aviso, tentativas a cada ~2 s, volta sozinha (áudio e vídeo) |
 | Entrada de som "Nenhuma" | sem som; "áudio: sem som (escolhido no menu)" registrado uma vez só |
 | Escolhida desconectada ao abrir | **pendente** (cabo da C270 de difícil acesso); coberto pelo teste `A_escolhida_desconectada_nao_troca_por_outra_nem_pela_MS2109` |
+
+## 1080p60 liberado na MS2109 (05/10/2026)
+
+Decisão do Douglas: mostrar o 1080p60 no menu, sem aviso, mesmo sabendo que a placa entrega 30 quadros bons.
+Testado por ele: "funcionando normal". Log: abriu em ~4 s, nenhum erro do decodificador com os pacotes vazios;
+diagnóstico com fps=60,0 na tela (o Windows repete o quadro no lugar do vazio).
