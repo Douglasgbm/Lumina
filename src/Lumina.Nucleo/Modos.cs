@@ -1,6 +1,9 @@
 namespace Lumina.Nucleo;
 
-/// <summary>Os modos que a placa oferece e que fazem sentido para jogar: 16:9, de 720p para cima, 30 ou 60 fps.</summary>
+/// <summary>
+/// Os modos que a placa oferece e que fazem sentido para jogar: 16:9, de 720p para cima, 30 ou 60 fps.
+/// O 1080p60 da MS2109 aparece (decisão do Douglas, 06/10/2026), com aviso no rótulo.
+/// </summary>
 public static class Modos
 {
     static readonly string[] Preferencia = ["MJPG", "NV12", "YUY2"];
@@ -11,7 +14,6 @@ public static class Modos
             .Select(f => new ModoVideo(f.Largura, f.Altura, Fps(f)))
             .Where(m => m.Fps is 30 or 60)
             .Distinct()
-            .Where(m => !DefeitoConhecido(link, m))
             .OrderBy(m => m.Altura).ThenBy(m => m.Fps)
             .ToList();
 
@@ -31,6 +33,10 @@ public static class Modos
             if (candidatos.FirstOrDefault(f => f.Subtipo == subtipo) is { } f) return f.Indice;
         return candidatos.FirstOrDefault()?.Indice;
     }
+
+    /// <summary>O texto do modo no menu; avisa quando a placa anuncia mais do que entrega.</summary>
+    public static string Rotulo(ModoVideo modo, string? link) =>
+        DefeitoConhecido(link, modo) ? $"{modo.Nome} (a placa entrega 30)" : modo.Nome;
 
     /// <summary>MS2109: anuncia 1080p60 mas entrega 30 imagens diferentes por segundo (medido em 03/10/2026).</summary>
     static bool DefeitoConhecido(string? link, ModoVideo m) =>

@@ -22,10 +22,19 @@ public class ModosTestes
     ];
 
     [Fact]
-    public void MS2109_mostra_720p30_720p60_1080p30_e_esconde_o_1080p60_falso()
+    public void MS2109_mostra_tambem_o_1080p60_a_pedido_do_Douglas()
     {
+        // 06/10/2026: decisão dele (opção A) — liberar mesmo sabendo que a placa entrega 30 quadros bons.
         var modos = Modos.Disponiveis(FormatosMs2109, PlacaTestes.Ms2109.Link);
-        Assert.Equal(["720p30", "720p60", "1080p30"], modos.Select(m => m.Nome));
+        Assert.Equal(["720p30", "720p60", "1080p30", "1080p60"], modos.Select(m => m.Nome));
+    }
+
+    [Fact]
+    public void Rotulo_do_1080p60_da_MS2109_avisa_que_entrega_30()
+    {
+        Assert.Equal("1080p60 (a placa entrega 30)", Modos.Rotulo(new ModoVideo(1920, 1080, 60), PlacaTestes.Ms2109.Link));
+        Assert.Equal("1080p30", Modos.Rotulo(ModoVideo.FullHd30, PlacaTestes.Ms2109.Link));
+        Assert.Equal("1080p60", Modos.Rotulo(new ModoVideo(1920, 1080, 60), @"\\?\usb#vid_345f&pid_2130&mi_00#8&1&0&0000#{e5323777}\global"));
     }
 
     [Fact]
@@ -54,7 +63,7 @@ public class ModosTestes
         var ms = Modos.Disponiveis(FormatosMs2109, PlacaTestes.Ms2109.Link);
         Assert.Equal("1080p30", Modos.Escolher(ms, "1080p30")!.Nome);
         Assert.Equal("720p60", Modos.Escolher(ms, "4k")!.Nome);
-        Assert.Equal("720p60", Modos.Escolher(ms, "1080p60")!.Nome); // escondido na MS2109
+        Assert.Equal("1080p60", Modos.Escolher(ms, "1080p60")!.Nome); // liberado na MS2109 (06/10/2026)
         var c270 = Modos.Disponiveis(FormatosC270, PlacaTestes.C270.Link);
         Assert.Equal("720p30", Modos.Escolher(c270, "720p60")!.Nome);
         Assert.Null(Modos.Escolher([], "720p60"));
