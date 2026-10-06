@@ -305,7 +305,7 @@ sealed class JanelaPrincipal : Form
             if (placas.DropDownItems.Count == 0) placas.DropDownItems.Add(new ToolStripMenuItem("(nenhuma câmera encontrada)") { Enabled = false });
             menu.Items.Add(placas);
             foreach (var m in _captura?.ModosDaPlaca ?? [])
-                menu.Items.Add(new ToolStripMenuItem(Modos.Rotulo(m, _placa?.Link), null, (_, _) => TrocarModo(m)) { Checked = m == _captura?.ModoAtual });
+                menu.Items.Add(new ToolStripMenuItem(m.Nome, null, (_, _) => TrocarModo(m)) { Checked = m == _captura?.ModoAtual });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem("Modo suave (como o OBS)", null, (_, _) => DefinirSuave(true))
             { Checked = _tela?.Suave == true });
